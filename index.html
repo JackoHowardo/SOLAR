@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sun Spot — when the sun hits here</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#F8F3E8; --paper:#FFFDF8; --ink:#201B14; --ink-soft:#5C554A;
+    --gold:#F0A311; --gold-deep:#C97E06; --golden:#DF7E0B; --shade:#57606C; --shade-soft:#9AA1AB;
+    --tree:#4C7A4C; --night:#2B2620; --line:#E4DCCB;
+    --radius:16px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; overflow:hidden;}
+  body{font-family:'Space Grotesk',system-ui,sans-serif; color:var(--ink); background:var(--cream);}
+  #map{position:fixed; inset:0; z-index:1; background:var(--cream);}
+
+  /* ---------- search ---------- */
+  .search-wrap{position:fixed; top:12px; left:12px; right:12px; z-index:1000; max-width:420px; margin:0 auto;}
+  .search-bar{display:flex; align-items:center; gap:10px; background:var(--paper); border:1.5px solid var(--ink);
+    border-radius:999px; padding:11px 16px; box-shadow:0 3px 0 var(--ink);}
+  .search-bar svg{flex:none;}
+  .search-bar input{flex:1; border:none; outline:none; background:transparent; font:inherit; font-size:15px; color:var(--ink); min-width:0;}
+  .search-bar input::placeholder{color:var(--ink-soft);}
+  .search-results{background:var(--paper); border:1.5px solid var(--ink); border-radius:var(--radius);
+    margin-top:8px; overflow:hidden; box-shadow:0 3px 0 var(--ink); display:none;}
+  .search-results.open{display:block;}
+  .search-results button{display:block; width:100%; text-align:left; background:none; border:none; font:inherit;
+    font-size:13.5px; padding:11px 16px; cursor:pointer; color:var(--ink); border-bottom:1px solid var(--line);}
+  .search-results button:last-child{border-bottom:none;}
+  .search-results button:hover, .search-results button:focus-visible{background:var(--cream);}
+  .search-results .muted{color:var(--ink-soft); font-size:12px; display:block; margin-top:1px;}
+
+  /* ---------- floating buttons ---------- */
+  .fab{position:fixed; left:11px; z-index:1000; width:44px; height:44px; border-radius:50%;
+    border:1.5px solid var(--ink); background:var(--paper); box-shadow:0 2px 0 var(--ink); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;}
+  .fab[aria-pressed="true"]{background:var(--gold);}
+  #compassBtn{top:246px;} #locateBtn{top:300px;}
+  .toast{position:fixed; left:50%; bottom:132px; transform:translateX(-50%); z-index:1200; background:var(--ink); color:var(--cream);
+    font-size:12.5px; padding:9px 16px; border-radius:999px; max-width:88vw; text-align:center; opacity:0; pointer-events:none; transition:opacity .25s;}
+  .toast.show{opacity:1;}
+
+  /* ---------- bottom sheet ---------- */
+  .sheet{position:fixed; left:0; right:0; bottom:0; z-index:1000; background:var(--paper);
+    border-top:1.5px solid var(--ink); border-radius:20px 20px 0 0; box-shadow:0 -4px 24px rgba(32,27,20,.14);
+    max-height:64vh; display:flex; flex-direction:column; transition:transform .28s cubic-bezier(.4,0,.2,1);}
+  .sheet.collapsed{transform:translateY(calc(100% - 118px));}
+  .sheet-head{padding:10px 20px 8px; cursor:pointer; flex:none; position:relative;}
+  .grab{width:40px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 10px;}
+  .ver{position:absolute; top:10px; right:16px; font-size:9.5px; font-weight:700; color:var(--ink-soft); letter-spacing:.5px;}
+  .place-row{display:flex; align-items:baseline; justify-content:space-between; gap:12px;}
+  .place-name{font-family:'Fraunces',serif; font-weight:650; font-size:19px; line-height:1.15; letter-spacing:.1px;
+    overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;}
+  .total-chip{flex:none; font-size:12px; font-weight:700; letter-spacing:.4px; padding:5px 11px; border-radius:999px;
+    background:var(--gold); color:var(--ink); border:1.5px solid var(--ink); white-space:nowrap;}
+  .total-chip.none{background:var(--shade-soft);}
+  .sheet-body{overflow-y:auto; padding:2px 20px 22px; -webkit-overflow-scrolling:touch;}
+
+  /* ---------- sun ribbon (signature) ---------- */
+  .ribbon-block{margin:10px 0 4px;}
+  .ribbon-time{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;}
+  .time-ctrl{display:flex; align-items:center; gap:8px;}
+  .tbtn{font:inherit; font-size:11.5px; font-weight:700; border:1.5px solid var(--ink); background:var(--paper);
+    color:var(--ink); border-radius:999px; padding:4px 11px; cursor:pointer; touch-action:manipulation;}
+  .tbtn:active{background:var(--gold);}
+  .tbtn-now{background:var(--gold);}
+  .ribbon-time .now{font-family:'Fraunces',serif; font-weight:650; font-size:22px; font-variant-numeric:tabular-nums;}
+  .ribbon-time .state{font-size:12px; font-weight:700; letter-spacing:.6px; text-transform:uppercase;}
+  .state.sun{color:var(--gold-deep);} .state.golden{color:var(--golden);} .state.shade{color:var(--shade);} .state.night{color:var(--ink-soft);}
+  .ribbon-wrap{position:relative; height:34px;}
+  .ribbon{position:absolute; inset:0; border:1.5px solid var(--ink); border-radius:8px; overflow:hidden;}
+  .ribbon-fill{position:absolute; inset:0;}
+  .ribbon-cursor{position:absolute; top:-4px; bottom:-4px; width:2.5px; background:var(--ink); border-radius:2px; pointer-events:none; transform:translateX(-1px);}
+  .ribbon-input{position:absolute; inset:-8px 0; width:100%; opacity:0; cursor:ew-resize; touch-action:none;}
+  .ribbon-hours{display:flex; justify-content:space-between; font-size:10px; color:var(--ink-soft); margin-top:5px; font-variant-numeric:tabular-nums;}
+  .cloud-row{display:flex; align-items:center; gap:8px; margin-top:7px;}
+  .cloud-strip{flex:1; height:7px; border:1px solid var(--line); border-radius:4px; overflow:hidden;}
+  .cloud-fill{height:100%;}
+  .cloud-label{font-size:10px; color:var(--ink-soft); white-space:nowrap;}
+
+  /* ---------- mini ribbons for compare ---------- */
+  .compare-block{margin-top:14px; border:1.5px solid var(--ink); border-radius:12px; padding:12px 14px; background:var(--cream);}
+  .compare-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .sec-title{font-size:11px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--ink-soft);}
+  .compare-x{font:inherit; font-size:11px; font-weight:700; border:1.5px solid var(--ink); background:var(--paper); border-radius:999px; padding:3px 10px; cursor:pointer;}
+  .mini-row{margin-bottom:9px;}
+  .mini-row:last-child{margin-bottom:0;}
+  .mini-meta{display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px; gap:10px;}
+  .mini-meta .nm{font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .mini-meta .tt{color:var(--gold-deep); font-weight:700; white-space:nowrap;}
+  .mini-ribbon{height:12px; border:1.5px solid var(--ink); border-radius:6px; overflow:hidden;}
+  .mini-fill{height:100%;}
+
+  /* ---------- sun finder ---------- */
+  .finder{margin-top:10px; border:1.5px solid var(--ink); border-radius:12px; padding:12px 14px; background:var(--cream);}
+  .finder-row{display:flex; gap:7px; align-items:center; flex-wrap:wrap; font-size:12.5px;}
+  .finder-row select, .finder-row input[type=time]{font:inherit; font-size:12.5px; border:1.5px solid var(--ink);
+    border-radius:999px; padding:5px 9px; background:var(--paper); color:var(--ink); outline:none;}
+  .finder-note{font-size:11.5px; color:var(--ink-soft); margin-top:8px; line-height:1.4;}
+  .frow{display:flex; width:100%; gap:10px; align-items:center; background:none; border:none;
+    border-bottom:1px solid var(--line); padding:9px 2px; font:inherit; font-size:13.5px; text-align:left; cursor:pointer; color:var(--ink);}
+  .frow:last-child{border-bottom:none;}
+  .fscore{font-weight:700; min-width:46px; font-variant-numeric:tabular-nums;}
+  .fname{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .fdist{font-size:11px; color:var(--ink-soft); white-space:nowrap;}
+
+  /* ---------- year strip ---------- */
+  .year-block{margin-top:16px;}
+  .year-bars{display:flex; align-items:flex-end; gap:4px; height:84px; margin-top:8px;}
+  .ybar{flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:3px; height:100%;}
+  .ybar .col{width:100%; background:var(--gold); border:1.5px solid var(--ink); border-bottom:none; border-radius:4px 4px 0 0; min-height:2px; transition:height .3s;}
+  .ybar.pending .col{background:var(--line); border-color:var(--line);}
+  .ybar.cur .col{background:var(--golden);}
+  .ybar .v{font-size:8.5px; color:var(--ink-soft); font-variant-numeric:tabular-nums;}
+  .ybar .m{font-size:9px; font-weight:700; color:var(--ink-soft);}
+  .year-note{font-size:10.5px; color:var(--ink-soft); margin-top:5px;}
+
+  /* ---------- windows list ---------- */
+  .windows{margin-top:14px; border-top:1px solid var(--line);}
+  .win-row{display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px;}
+  .win-dot{flex:none; width:10px; height:10px; border-radius:50%; border:1.5px solid var(--ink);}
+  .win-dot.sun{background:var(--gold);} .win-dot.rise{background:var(--paper);}
+  .win-main{flex:1; font-variant-numeric:tabular-nums;}
+  .win-main b{font-weight:700;}
+  .win-side{font-size:12px; color:var(--ink-soft); white-space:nowrap;}
+  .note{font-size:12.5px; color:var(--ink-soft); line-height:1.45; margin-top:12px;}
+  .note b{color:var(--ink);}
+
+  /* ---------- chips ---------- */
+  .chips{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; align-items:center;}
+  .chips + .chips{margin-top:8px;}
+  .chip{font:inherit; font-size:12.5px; font-weight:500; padding:7px 13px; border-radius:999px; border:1.5px solid var(--ink);
+    background:var(--paper); color:var(--ink); cursor:pointer;}
+  .chip[aria-pressed="true"]{background:var(--ink); color:var(--cream);}
+  .chip-date{padding:6px 10px;}
+  .chip-date input{border:none; background:transparent; font:inherit; font-size:12.5px; color:inherit; outline:none; width:118px;}
+  .height-row{display:flex; align-items:center; gap:10px; margin-top:14px; font-size:12.5px; color:var(--ink-soft);}
+  .height-row input[type=range]{flex:1; accent-color:var(--gold-deep);}
+  .height-row output{font-weight:700; color:var(--ink); min-width:34px; text-align:right; font-variant-numeric:tabular-nums;}
+
+  /* ---------- states ---------- */
+  .empty{padding:6px 0 2px; font-size:14px; color:var(--ink-soft); line-height:1.5;}
+  .empty b{color:var(--ink);}
+  .loading-row{display:flex; align-items:center; gap:10px; padding:8px 0; font-size:13.5px; color:var(--ink-soft);}
+  .spin{width:16px; height:16px; border:2px solid var(--line); border-top-color:var(--gold-deep); border-radius:50%; animation:spin .8s linear infinite; flex:none;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .error{font-size:13px; color:#9B3B1F; padding:8px 0;}
+  .error button{font:inherit; font-size:12px; font-weight:700; border:1.5px solid var(--ink); background:var(--paper); border-radius:999px; padding:4px 12px; cursor:pointer; margin-left:6px;}
+
+  .leaflet-container{font-family:'Space Grotesk',sans-serif;}
+  .leaflet-control-attribution{font-size:9px !important; background:rgba(255,253,248,.8) !important;}
+  .leaflet-control-zoom{border:1.5px solid var(--ink) !important; border-radius:12px !important; overflow:hidden; box-shadow:0 2px 0 var(--ink) !important; margin-top:74px !important;}
+  .leaflet-control-zoom a{color:var(--ink) !important; background:var(--paper) !important;}
+  .pin-icon{filter:drop-shadow(0 2px 2px rgba(32,27,20,.35));}
+  .sun-tag{font-size:11px; font-weight:700; background:var(--paper); border:1.5px solid var(--ink); border-radius:999px;
+    padding:3px 10px; white-space:nowrap; transform:translate(-50%,0); color:var(--ink); box-shadow:0 2px 0 var(--ink); display:inline-block;}
+
+  @media (min-width:760px){
+    .search-wrap{left:16px; margin:0;}
+    .sheet{left:16px; right:auto; bottom:16px; width:400px; border:1.5px solid var(--ink); border-radius:20px; box-shadow:0 4px 0 var(--ink); max-height:calc(100vh - 110px);}
+    .sheet.collapsed{transform:translateY(calc(100% - 118px + 16px));}
+  }
+  @media (prefers-reduced-motion:reduce){ .sheet{transition:none;} .spin{animation-duration:2s;} .ybar .col{transition:none;} }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="search-wrap">
+  <div class="search-bar">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="searchInput" type="search" placeholder="Search a bar, street, city…" autocomplete="off" enterkeyhint="search">
+  </div>
+  <div id="searchResults" class="search-results" role="listbox"></div>
+</div>
+
+<button class="fab" id="compassBtn" aria-label="Rotate map to face your direction" aria-pressed="false">
+  <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 2l4.5 10.5L12 10l-4.5 2.5L12 2z" fill="#C97E06"/><path d="M12 22l-4.5-10.5L12 14l4.5-2.5L12 22z" fill="#57606C"/></svg>
+</button>
+<button class="fab" id="locateBtn" aria-label="Drop a pin where I am" aria-pressed="false">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#201B14" stroke-width="2"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2" fill="#201B14"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke-linecap="round"/></svg>
+</button>
+<div class="toast" id="toast" role="status"></div>
+
+<div class="sheet collapsed" id="sheet">
+  <div class="sheet-head" id="sheetHead">
+    <div class="grab"></div>
+    <span class="ver">V7</span>
+    <div class="place-row">
+      <div class="place-name" id="placeName">Tap the map or search</div>
+      <div class="total-chip" id="totalChip" hidden></div>
+    </div>
+  </div>
+  <div class="sheet-body" id="sheetBody">
+    <div class="empty" id="emptyMsg">The gold cone shows <b>where the sun is right now</b> over the map, and the dotted arc is its path today. Drop a pin anywhere and I'll pull the surrounding buildings and trees, tell you <b>exactly when direct sun reaches that spot</b>, and let you scrub through the day, compare places, and see the whole year.</div>
+    <div id="results" hidden>
+      <div class="ribbon-block">
+        <div class="ribbon-time">
+          <div class="time-ctrl">
+            <button class="tbtn" id="hourDown" aria-label="Back one hour">−1 h</button>
+            <span class="now" id="timeLabel">12:00</span>
+            <button class="tbtn" id="hourUp" aria-label="Forward one hour">+1 h</button>
+            <button class="tbtn tbtn-now" id="btnNow">Now</button>
+          </div>
+          <span class="state" id="stateLabel"></span>
+        </div>
+        <div class="ribbon-wrap">
+          <div class="ribbon"><div class="ribbon-fill" id="ribbonFill"></div></div>
+          <div class="ribbon-cursor" id="ribbonCursor"></div>
+          <input class="ribbon-input" id="ribbonInput" type="range" min="0" max="1439" step="1" value="720" aria-label="Time of day">
+        </div>
+        <div class="ribbon-hours"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      </div>
+
+      <div class="chips">
+        <label class="chip chip-date"><input type="date" id="dateInput" aria-label="Date"></label>
+        <button class="chip" id="chipToday">Today</button>
+      </div>
+      <div class="chips">
+        <button class="chip" id="chipTrees" aria-pressed="true">🌳 Trees on</button>
+        <button class="chip" id="chipCloud" aria-pressed="true">☁ Forecast on</button>
+        <button class="chip" id="chipCompare" aria-pressed="false">⇄ Compare</button>
+        <button class="chip" id="chipFinder" aria-pressed="false">☀ Find sun</button>
+      </div>
+
+      <div class="finder" id="finderBlock" hidden>
+        <div class="finder-row">
+          <select id="findCat" aria-label="What kind of place">
+            <option value="pub">Pubs &amp; beer gardens</option>
+            <option value="cafe">Cafés</option>
+            <option value="restaurant">Restaurants</option>
+            <option value="bench">Benches &amp; picnic tables</option>
+          </select>
+          <input type="time" id="findFrom" aria-label="From">
+          <span>–</span>
+          <input type="time" id="findTo" aria-label="Until">
+          <button class="tbtn tbtn-now" id="findGo">Go</button>
+        </div>
+        <div class="finder-note" id="finderNote">Searches what's on the map right now, for the date picked above.</div>
+        <div id="finderResults"></div>
+      </div>
+
+      <div class="compare-block" id="compareBlock" hidden>
+        <div class="compare-head">
+          <span class="sec-title">Comparing</span>
+          <button class="compare-x" id="compareClear">clear</button>
+        </div>
+        <div id="compareRows"></div>
+      </div>
+
+      <div class="windows" id="windowsList"></div>
+
+      <div class="year-block">
+        <span class="sec-title">Year here — sun hours on the 21st of each month</span>
+        <div class="year-bars" id="yearBars"></div>
+        <div class="year-note" id="yearNote"></div>
+      </div>
+
+      <div class="height-row">
+        <span>Unmapped building height</span>
+        <input type="range" id="assumedH" min="4" max="24" step="1" value="9" aria-label="Assumed height for buildings with no data">
+        <output id="assumedHOut">9 m</output>
+      </div>
+    </div>
+    <div class="loading-row" id="loadingRow" hidden><div class="spin"></div><span id="loadingText">Fetching buildings…</span></div>
+    <div class="error" id="errorRow" hidden></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   SUN SPOT v7 — where & when the sun hits a point
+   Solar position: NOAA-style astronomy (no libraries)
+   Obstructions: OSM buildings + trees via Overpass, OSM API fallback
+   Cloud forecast: Open-Meteo (16 days ahead)
+   ============================================================ */
+
+const $ = id => document.getElementById(id);
+const RAD = Math.PI/180, DEG = 180/Math.PI;
+const GOLDEN_ALT = 7; // sun below this altitude (but up) = golden light
+
+/* ---------------- map ---------------- */
+const map = L.map('map', {zoomControl:true, worldCopyJump:true, rotate:true, rotateControl:false, touchRotate:false, bearing:0})
+  .setView([51.8985, -8.4756], 15); // Cork, obviously
+
+// Shadows live in their own pane: solid polygons inside, one opacity applied to the
+// merged result — so 100 overlapping shadows read as one shadow, like real shade.
+const shadowPane = map.createPane('shadowPane');
+shadowPane.style.opacity = 0.26;
+shadowPane.style.zIndex = 350;
+shadowPane.style.pointerEvents = 'none';
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+  subdomains:'abcd', maxZoom:20
+}).addTo(map);
+
+const pinIcon = L.divIcon({
+  className:'pin-icon', iconSize:[30,40], iconAnchor:[15,38],
+  html:`<svg width="30" height="40" viewBox="0 0 30 40"><path d="M15 1C7.8 1 2 6.8 2 14c0 9.8 13 25 13 25s13-15.2 13-25C28 6.8 22.2 1 15 1z" fill="#F0A311" stroke="#201B14" stroke-width="2"/><circle cx="15" cy="14" r="5" fill="#FFFDF8" stroke="#201B14" stroke-width="2"/></svg>`
+});
+const pinIconB = L.divIcon({
+  className:'pin-icon', iconSize:[26,35], iconAnchor:[13,33],
+  html:`<svg width="26" height="35" viewBox="0 0 30 40"><path d="M15 1C7.8 1 2 6.8 2 14c0 9.8 13 25 13 25s13-15.2 13-25C28 6.8 22.2 1 15 1z" fill="#57606C" stroke="#201B14" stroke-width="2"/><circle cx="15" cy="14" r="5" fill="#FFFDF8" stroke="#201B14" stroke-width="2"/></svg>`
+});
+
+let pinMarker=null, compareMarker=null,
+    shadowLayer=L.layerGroup().addTo(map),
+    footprintLayer=L.layerGroup().addTo(map),
+    coneLayer=L.layerGroup().addTo(map),
+    arcLayer=L.layerGroup().addTo(map);
+
+/* ---------------- state ---------------- */
+const S = {
+  pin:null,
+  date:new Date(),
+  minutes: new Date().getHours()*60 + new Date().getMinutes(),
+  buildings:[], trees:[], treesOn:true, forecastOn:true,
+  act:[],                 // active obstruction set used for the maths
+  day:null,               // {samples, azAt, altAt, segments, sunrise, sunset, total}
+  insideBuilding:false,
+  cloud:{},               // 'YYYY-MM-DD' -> [24 hourly cloud %]
+  compare:null,           // {label, pin, day}
+  pendingCompare:false,
+  fetchToken:0, yearToken:0
+};
+
+/* ---------------- solar position (NOAA-style) ---------------- */
+function sunPosition(date, lat, lng){
+  const jd = date.getTime()/86400000 + 2440587.5;
+  const d  = jd - 2451545.0;
+  const g  = RAD*(((357.529 + 0.98560028*d)%360+360)%360);
+  const q  = ((280.459 + 0.98564736*d)%360+360)%360;
+  const Ld = (q + 1.915*Math.sin(g) + 0.020*Math.sin(2*g));
+  const Lr = RAD*(((Ld)%360+360)%360);
+  const e  = RAD*(23.439 - 0.00000036*d);
+  const RA = Math.atan2(Math.cos(e)*Math.sin(Lr), Math.cos(Lr));
+  const dec= Math.asin(Math.sin(e)*Math.sin(Lr));
+  const gmst=(18.697374558 + 24.06570982441908*d)%24;
+  const lst =(gmst + lng/15)%24;
+  let H = lst*15 - RA*DEG;
+  H = ((H+540)%360)-180;
+  const Hr = H*RAD, la = lat*RAD;
+  const alt = Math.asin(Math.sin(la)*Math.sin(dec) + Math.cos(la)*Math.cos(dec)*Math.cos(Hr));
+  let cosAz = (Math.sin(dec) - Math.sin(alt)*Math.sin(la)) / (Math.cos(alt)*Math.cos(la));
+  cosAz = Math.min(1, Math.max(-1, cosAz));
+  let az = Math.acos(cosAz)*DEG;
+  if (Math.sin(Hr) > 0) az = 360 - az;
+  return {alt: alt*DEG, az};
+}
+
+/* ---------------- geometry helpers ---------------- */
+function localFrame(pin){
+  const mLat = 111320, mLng = 111320*Math.cos(pin.lat*RAD);
+  return {
+    toXY: ll => ({x:(ll.lng-pin.lng)*mLng, y:(ll.lat-pin.lat)*mLat}),
+    toLL: p  => ({lat:pin.lat + p.y/mLat, lng:pin.lng + p.x/mLng})
+  };
+}
+function pointInPoly(p, pts){
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const a=pts[i],b=pts[j];
+    if(((a.y>p.y)!==(b.y>p.y)) && (p.x < (b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)) inside=!inside;
+  }
+  return inside;
+}
+function rayHitsO(ox, oy, dx, dy, pts, maxDist){
+  const hits=[];
+  for(let i=0;i<pts.length;i++){
+    const a=pts[i], b=pts[(i+1)%pts.length];
+    const ax=a.x-ox, ay=a.y-oy;
+    const ex=b.x-a.x, ey=b.y-a.y;
+    const det = -dx*ey + dy*ex;
+    if (Math.abs(det) < 1e-9) continue;
+    const tt = (-ax*ey + ay*ex)/det;
+    const ss = ( dx*ay - dy*ax)/det;
+    if (tt > 0.5 && tt < maxDist && ss >= 0 && ss <= 1) hits.push(tt);
+  }
+  return hits;
+}
+const rayHits = (dx, dy, pts, maxDist) => rayHitsO(0, 0, dx, dy, pts, maxDist);
+function convexHull(points){
+  const pts=[...points].sort((a,b)=>a.x-b.x||a.y-b.y);
+  if(pts.length<3) return pts;
+  const cross=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x);
+  const lower=[], upper=[];
+  for(const p of pts){ while(lower.length>=2 && cross(lower[lower.length-2],lower[lower.length-1],p)<=0) lower.pop(); lower.push(p); }
+  for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; while(upper.length>=2 && cross(upper[upper.length-2],upper[upper.length-1],p)<=0) upper.pop(); upper.push(p); }
+  return lower.slice(0,-1).concat(upper.slice(0,-1));
+}
+const compass = az => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(az/22.5)%16];
+const fmtTime = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(Math.round(m)%60).padStart(2,'0')}`;
+const fmtDur = m => m>=60 ? `${Math.floor(m/60)} h ${String(Math.round(m%60)).padStart(2,'0')} m` : `${Math.round(m)} m`;
+const dateKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+/* ---------------- obstruction data (buildings + trees) ---------------- */
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter'
+];
+async function fetchJson(url, ms){
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), ms);
+  try{
+    const res = await fetch(url, {signal:ctrl.signal});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return await res.json();
+  } finally { clearTimeout(timer); }
+}
+const VENUE_RE = /^(cafe|bar|pub|biergarten|restaurant|bench)$/;
+async function fetchFromOsmApi(pin, radius=320, withVenues=false){
+  const dLat = radius/111320, dLng = radius/(111320*Math.cos(pin.lat*RAD));
+  const bbox = [pin.lng-dLng, pin.lat-dLat, pin.lng+dLng, pin.lat+dLat].map(v=>v.toFixed(6)).join(',');
+  const j = await fetchJson(`https://api.openstreetmap.org/api/0.6/map.json?bbox=${bbox}`, 30000);
+  const nodes = new Map();
+  for(const el of j.elements) if(el.type==='node') nodes.set(el.id, {lat:el.lat, lon:el.lon, tags:el.tags});
+  const out = [];
+  for(const el of j.elements){
+    if(el.type==='node' && el.tags &&
+       (el.tags.natural==='tree' || (withVenues && (VENUE_RE.test(el.tags.amenity||'') || el.tags.leisure==='picnic_table')))){
+      out.push({type:'node', tags:el.tags, lat:el.lat, lon:el.lon});
+    }
+    if(el.type==='way' && el.tags && el.nodes && el.nodes.length>1){
+      const t=el.tags;
+      if(t.building || t.natural==='tree_row' || t.natural==='wood' || t.landuse==='forest' ||
+         (withVenues && VENUE_RE.test(t.amenity||''))){
+        const geometry = el.nodes.map(id=>nodes.get(id)).filter(Boolean).map(n=>({lat:n.lat, lon:n.lon}));
+        if(geometry.length>1) out.push({type:'way', tags:t, geometry});
+      }
+    }
+  }
+  return out;
+}
+async function fetchArea(center, radius, withVenues, onStatus){
+  if(onStatus) onStatus('Fetching map data (racing 4 sources)…');
+  const c = `${center.lat.toFixed(6)},${center.lng.toFixed(6)}`;
+  let q = `[out:json][timeout:23];(way["building"](around:${radius},${c});node["natural"="tree"](around:${radius},${c});way["natural"="tree_row"](around:${radius},${c});way["natural"="wood"](around:${radius},${c});way["landuse"="forest"](around:${radius},${c});`;
+  if(withVenues) q += `nw["amenity"~"^(cafe|bar|pub|biergarten|restaurant|bench)$"](around:${radius},${c});node["leisure"="picnic_table"](around:${radius},${c});`;
+  q += `);out geom;`;
+  const attempts = OVERPASS.map(u =>
+    fetchJson(u+'?data='+encodeURIComponent(q), 25000).then(j => j.elements || [])
+  );
+  attempts.push(fetchFromOsmApi(center, radius, withVenues));
+  try{ return await Promise.any(attempts); }
+  catch(e){ throw new Error('all 4 data sources failed'); }
+}
+async function fetchObstructions(pin, onStatus){
+  return fetchArea(pin, 320, false, onStatus);
+}
+function parseHeight(tags, fallback){
+  if(tags && tags.height){ const v=parseFloat(String(tags.height).replace(/[^\d.]/g,'')); if(v>0) return {h:v, hasData:true}; }
+  if(tags && tags['building:levels']){ const l=parseFloat(tags['building:levels']); if(l>0) return {h:l*3.2+1, hasData:true}; }
+  return {h:fallback, hasData:false};
+}
+function finishPoly(pts, frame){
+  let cx=0, cy=0;
+  for(const p of pts){ cx+=p.x; cy+=p.y; }
+  cx/=pts.length; cy/=pts.length;
+  return {cx, cy, dist: Math.hypot(cx, cy),
+          ptsLL: pts.map(p=>{const ll=frame.toLL(p); return [ll.lat,ll.lng];})};
+}
+function prepareObstructions(elements, frame, assumed){
+  const buildings=[], trees=[];
+  for(const el of elements){
+    const tags = el.tags || {};
+    // single trees → small square canopy
+    if(el.lat!=null && tags.natural==='tree'){
+      const c = frame.toXY({lat:el.lat, lng:el.lon});
+      const r = 2.5;
+      const pts=[{x:c.x-r,y:c.y-r},{x:c.x+r,y:c.y-r},{x:c.x+r,y:c.y+r},{x:c.x-r,y:c.y+r}];
+      const {h} = parseHeight(tags, 8);
+      trees.push({pts, h, hasData:false, kind:'tree', ...finishPoly(pts, frame)});
+      continue;
+    }
+    if(!el.geometry || el.geometry.length<2) continue;
+    const raw = el.geometry.map(g=>frame.toXY({lat:g.lat, lng:g.lon}));
+    // tree rows → thin quads per segment
+    if(tags.natural==='tree_row'){
+      for(let i=0;i<raw.length-1;i++){
+        const a=raw[i], b=raw[i+1];
+        const len=Math.hypot(b.x-a.x, b.y-a.y); if(len<0.5) continue;
+        const nx=-(b.y-a.y)/len*1.5, ny=(b.x-a.x)/len*1.5;
+        const pts=[{x:a.x+nx,y:a.y+ny},{x:b.x+nx,y:b.y+ny},{x:b.x-nx,y:b.y-ny},{x:a.x-nx,y:a.y-ny}];
+        trees.push({pts, h:8, hasData:false, kind:'tree', ...finishPoly(pts, frame)});
+      }
+      continue;
+    }
+    if(raw.length<4) continue;
+    // woods & forests → canopy walls, buildings → buildings
+    if(tags.natural==='wood' || tags.landuse==='forest'){
+      trees.push({pts:raw, h:10, hasData:false, kind:'tree', ...finishPoly(raw, frame)});
+    }else if(tags.building){
+      const {h,hasData} = parseHeight(tags, assumed);
+      buildings.push({pts:raw, h, hasData, kind:'building', ...finishPoly(raw, frame)});
+    }
+  }
+  return {buildings, trees};
+}
+
+/* ---------------- cloud forecast (Open-Meteo) ---------------- */
+async function fetchCloud(pin){
+  try{
+    const j = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${pin.lat.toFixed(4)}&longitude=${pin.lng.toFixed(4)}&hourly=cloud_cover&forecast_days=16&timezone=auto`, 12000);
+    const out={};
+    j.hourly.time.forEach((t,i)=>{
+      const day=t.slice(0,10);
+      (out[day] = out[day] || [])[+t.slice(11,13)] = j.hourly.cloud_cover[i];
+    });
+    return out;
+  }catch{ return {}; }
+}
+
+/* ---------------- day computation ---------------- */
+function midnightOf(d){ const m=new Date(d); m.setHours(0,0,0,0); return m; }
+const STEP = 4;
+
+function activeSet(){
+  const all = S.treesOn ? S.buildings.concat(S.trees) : S.buildings;
+  const act = all.filter(b=>!pointInPoly({x:0,y:0}, b.pts));
+  S.insideBuilding = act.length !== all.length;
+  return act;
+}
+function computeDayFor(date, act, pin){
+  const base = midnightOf(date);
+  const n = 1440/STEP;
+  const samples=new Array(n), azAt=new Array(n), altAt=new Array(n);
+  let sunrise=null, sunset=null, prevUp=false;
+  for(let i=0;i<n;i++){
+    const t = new Date(base.getTime() + i*STEP*60000);
+    const {alt, az} = sunPosition(t, pin.lat, pin.lng);
+    azAt[i]=az; altAt[i]=alt;
+    const up = alt > 0.4;
+    if(up && !prevUp && sunrise===null) sunrise = i*STEP;
+    if(!up && prevUp) sunset = i*STEP;
+    prevUp = up;
+    if(!up){ samples[i]=0; continue; }
+    const dx=Math.sin(az*RAD), dy=Math.cos(az*RAD);
+    let blocked=false;
+    for(const b of act){
+      const hits = rayHits(dx, dy, b.pts, 400);
+      for(const d of hits){
+        if(Math.atan2(b.h, d)*DEG >= alt){ blocked=true; break; }
+      }
+      if(blocked) break;
+    }
+    samples[i] = blocked ? 1 : 2;
+  }
+  const segments=[]; let s=null;
+  for(let i=0;i<n;i++){
+    if(samples[i]===2 && s===null) s=i;
+    if(samples[i]!==2 && s!==null){ segments.push({from:s*STEP, to:i*STEP, azFrom:azAt[s], azTo:azAt[i-1]}); s=null; }
+  }
+  if(s!==null) segments.push({from:s*STEP, to:1440, azFrom:azAt[s], azTo:azAt[n-1]});
+  const total = segments.reduce((a,x)=>a+(x.to-x.from),0);
+  return {samples, azAt, altAt, segments, sunrise, sunset, total};
+}
+
+/* ---------------- rendering: ribbons ---------------- */
+function cloudHours(){ return S.forecastOn ? S.cloud[dateKey(S.date)] : null; }
+function ribbonGradient(day){
+  const hours = cloudHours();
+  const colorAt = i => {
+    if(day.samples[i]===0) return '#2B2620';
+    if(day.samples[i]===1) return '#9AA1AB';
+    // sunlit: golden vs full sun, muted if forecast says overcast
+    const cc = hours ? hours[Math.floor(i*STEP/60)] : null;
+    if(cc!=null && cc>=65) return '#C2B295';
+    return day.altAt[i] < GOLDEN_ALT ? '#DF7E0B' : '#F0A311';
+  };
+  const stops=[]; let runStart=0;
+  for(let i=1;i<=day.samples.length;i++){
+    if(i===day.samples.length || colorAt(i)!==colorAt(runStart)){
+      const a=(runStart*STEP/1440*100).toFixed(2), b=(i*STEP/1440*100).toFixed(2);
+      stops.push(`${colorAt(runStart)} ${a}% ${b}%`);
+      runStart=i;
+    }
+  }
+  return `linear-gradient(90deg, ${stops.join(',')})`;
+}
+function renderRibbon(){ $('ribbonFill').style.background = ribbonGradient(S.day); }
+function meanCloud(from, to){
+  const hours = S.cloud[dateKey(S.date)];
+  if(!hours) return null;
+  let sum=0, n=0;
+  for(let h=Math.floor(from/60); h<=Math.min(23, Math.floor((to-1)/60)); h++){
+    if(hours[h]!=null){ sum+=hours[h]; n++; }
+  }
+  return n ? sum/n : null;
+}
+
+/* ---------------- rendering: panel ---------------- */
+function renderWindows(){
+  const el = $('windowsList'); el.innerHTML='';
+  const D = S.day;
+  const addRow=(dotCls, main, side)=>{
+    const r=document.createElement('div'); r.className='win-row';
+    r.innerHTML=`<span class="win-dot ${dotCls}"></span><span class="win-main">${main}</span><span class="win-side">${side}</span>`;
+    el.appendChild(r);
+  };
+  if(D.sunrise!==null) addRow('rise', `Sunrise <b>${fmtTime(D.sunrise)}</b> · Sunset <b>${fmtTime(D.sunset??1439)}</b>`, `day ${fmtDur((D.sunset??1440)-D.sunrise)}`);
+  if(D.segments.length===0){
+    addRow('', `<b>No direct sun</b> reaches this exact point`, D.sunrise===null?'polar night?':'shaded all day');
+  }else{
+    for(const seg of D.segments){
+      const dir = compass(seg.azFrom)===compass(seg.azTo) ? `from ${compass(seg.azFrom)}` : `${compass(seg.azFrom)} → ${compass(seg.azTo)}`;
+      const mc = S.forecastOn ? meanCloud(seg.from, seg.to) : null;
+      const cl = mc==null ? '' : mc>=70 ? ' · ☁' : mc>=40 ? ' · ⛅' : ' · ☀';
+      addRow('sun', `Sun <b>${fmtTime(seg.from)} – ${fmtTime(seg.to)}</b>`, `${fmtDur(seg.to-seg.from)} · ${dir}${cl}`);
+    }
+  }
+  const chip=$('totalChip'); chip.hidden=false;
+  chip.textContent = D.total>0 ? `☀ ${fmtDur(D.total)}` : 'No direct sun';
+  chip.classList.toggle('none', D.total===0);
+  if(S.insideBuilding) toast('Your pin is inside a building or wood — that shape is ignored; nudge the pin for accuracy');
+}
+function renderTimeState(){
+  $('timeLabel').textContent = fmtTime(S.minutes);
+  const i=Math.min(S.day.samples.length-1, Math.floor(S.minutes/STEP));
+  const st=S.day.samples[i], golden = st===2 && S.day.altAt[i] < GOLDEN_ALT;
+  const hours = cloudHours();
+  const cc = (st===2 && hours) ? hours[Math.floor(S.minutes/60)] : null;
+  const lab=$('stateLabel');
+  let txt = golden ? 'Golden light' : st===2 ? 'In the sun' : st===1 ? 'In shade' : 'Night';
+  if(cc!=null && cc>=65) txt += ' · ☁';
+  lab.textContent = txt;
+  lab.className = 'state ' + (golden ? 'golden' : st===2 ? 'sun' : st===1 ? 'shade' : 'night');
+  $('ribbonCursor').style.left = (S.minutes/1440*100)+'%';
+}
+function renderCompare(){
+  const block=$('compareBlock');
+  if(!S.compare || !S.day){ block.hidden=true; return; }
+  block.hidden=false;
+  const rows=$('compareRows'); rows.innerHTML='';
+  const mk=(label, day)=>{
+    const r=document.createElement('div'); r.className='mini-row';
+    r.innerHTML=`<div class="mini-meta"><span class="nm">${label}</span><span class="tt">☀ ${day.total>0?fmtDur(day.total):'none'}</span></div>
+      <div class="mini-ribbon"><div class="mini-fill" style="background:${ribbonGradient(day)}"></div></div>`;
+    rows.appendChild(r);
+  };
+  mk('A · '+S.compare.label, S.compare.day);
+  mk('B · '+($('placeName').textContent), S.day);
+}
+
+/* ---------------- year strip ---------------- */
+const MONTHS='JFMAMJJASOND';
+function initYearBars(){
+  const wrap=$('yearBars'); wrap.innerHTML='';
+  for(let m=0;m<12;m++){
+    const b=document.createElement('div');
+    b.className='ybar pending'+(m===new Date().getMonth()?' cur':'');
+    b.innerHTML=`<span class="v"></span><div class="col" style="height:2px"></div><span class="m">${MONTHS[m]}</span>`;
+    wrap.appendChild(b);
+  }
+  $('yearNote').textContent='calculating…';
+}
+async function computeYear(){
+  const token = ++S.yearToken;
+  initYearBars();
+  const bars=$('yearBars').children;
+  const year=S.date.getFullYear();
+  for(let m=0;m<12;m++){
+    await new Promise(r=>setTimeout(r, 30)); // keep UI responsive
+    if(token!==S.yearToken || !S.pin) return;
+    const day = computeDayFor(new Date(year, m, 21), S.act, S.pin);
+    const hrs = day.total/60;
+    const bar = bars[m];
+    bar.classList.remove('pending');
+    bar.querySelector('.col').style.height = Math.max(3, hrs/16*58)+'px';
+    bar.querySelector('.v').textContent = hrs>=0.95 ? Math.round(hrs) : hrs>0 ? '½' : '0';
+  }
+  if(token===S.yearToken) $('yearNote').textContent='hours of direct sun · amber bar = this month';
+}
+
+/* ---------------- rendering: map layers ---------------- */
+function drawList(){ return (S.treesOn ? S.buildings.concat(S.trees) : S.buildings).filter(b=>b.dist<=240); }
+function renderFootprints(){
+  footprintLayer.clearLayers();
+  for(const b of drawList()){
+    L.polygon(b.ptsLL, {color: b.kind==='tree' ? '#4C7A4C' : '#57606C', weight:1, opacity:.35, fill:false, interactive:false}).addTo(footprintLayer);
+  }
+}
+function renderShadows(){
+  shadowLayer.clearLayers(); coneLayer.clearLayers();
+  if(!S.pin) return;
+  const frame = localFrame(S.pin);
+  const t = new Date(midnightOf(S.date).getTime() + S.minutes*60000);
+  const {alt, az} = sunPosition(t, S.pin.lat, S.pin.lng);
+  if(alt <= 0.4) return;
+
+  const ax = Math.sin((az+180)*RAD), ay = Math.cos((az+180)*RAD);
+  const tanAlt = Math.tan(Math.max(alt, 1.0)*RAD);
+  for(const b of drawList()){
+    const len = Math.min(150, b.h / tanAlt);
+    const proj = b.pts.map(p=>({x:p.x+ax*len, y:p.y+ay*len}));
+    const hull = convexHull(b.pts.concat(proj));
+    if(hull.length<3) continue;
+    L.polygon(hull.map(p=>{const ll=frame.toLL(p); return [ll.lat,ll.lng];}),
+      {pane:'shadowPane', stroke:false, fillColor:'#57606C', fillOpacity:1, interactive:false}).addTo(shadowLayer);
+  }
+  const coneR=52, spread=11;
+  const conePts=[{x:0,y:0}];
+  for(let a=az-spread; a<=az+spread; a+=2.5) conePts.push({x:Math.sin(a*RAD)*coneR, y:Math.cos(a*RAD)*coneR});
+  L.polygon(conePts.map(p=>{const ll=frame.toLL(p); return [ll.lat,ll.lng];}),
+    {stroke:false, fillColor:'#F0A311', fillOpacity:.5, interactive:false}).addTo(coneLayer);
+  const tip = frame.toLL({x:Math.sin(az*RAD)*coneR*1.35, y:Math.cos(az*RAD)*coneR*1.35});
+  L.polyline([[S.pin.lat,S.pin.lng],[tip.lat,tip.lng]], {color:'#C97E06', weight:2.5, dashArray:'2 6', interactive:false}).addTo(coneLayer);
+  L.circleMarker([tip.lat,tip.lng],{radius:7, color:'#201B14', weight:1.5, fillColor:'#F0A311', fillOpacity:1, interactive:false}).addTo(coneLayer);
+}
+function renderSunArc(){
+  arcLayer.clearLayers();
+  if(!S.pin || S.day.sunrise===null) return;
+  const frame=localFrame(S.pin), pts=[];
+  for(let m=S.day.sunrise; m<=(S.day.sunset??1439); m+=20){
+    const t=new Date(midnightOf(S.date).getTime()+m*60000);
+    const {az}=sunPosition(t,S.pin.lat,S.pin.lng);
+    const ll=frame.toLL({x:Math.sin(az*RAD)*70, y:Math.cos(az*RAD)*70});
+    pts.push([ll.lat,ll.lng]);
+  }
+  L.polyline(pts,{color:'#C97E06', weight:1.5, dashArray:'1 7', opacity:.9, interactive:false}).addTo(arcLayer);
+}
+
+/* ---------------- orchestration ---------------- */
+function rerenderDay(){
+  renderRibbon(); renderWindows(); renderTimeState();
+  renderShadows(); renderSunArc(); renderCompare();
+}
+function recompute(){
+  S.act = activeSet();
+  S.day = computeDayFor(S.date, S.act, S.pin);
+  rerenderDay();
+  computeYear();
+}
+function updateHash(){
+  if(!S.pin) return;
+  const h = `#p=${S.pin.lat.toFixed(5)},${S.pin.lng.toFixed(5)}&d=${dateKey(S.date)}`;
+  try{ history.replaceState(null,'',h); }catch{}
+}
+
+async function setPin(lat, lng, label){
+  // compare handoff: keep the previous pin as A
+  if(S.pendingCompare && S.pin && S.day){
+    S.compare = {label: $('placeName').textContent, pin: S.pin, day: S.day};
+    S.pendingCompare = false;
+    $('chipCompare').setAttribute('aria-pressed','false');
+    if(compareMarker) compareMarker.remove();
+    compareMarker = L.marker([S.pin.lat,S.pin.lng], {icon:pinIconB, keyboard:false}).addTo(map);
+  }
+  S.pin={lat,lng};
+  if(pinMarker) pinMarker.remove();
+  pinMarker=L.marker([lat,lng],{icon:pinIcon, keyboard:false}).addTo(map);
+  $('sheet').classList.remove('collapsed');
+  $('emptyMsg').hidden=true; $('results').hidden=true; $('errorRow').hidden=true;
+  $('loadingRow').hidden=false; $('totalChip').hidden=true;
+  $('placeName').textContent = label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+  const token=++S.fetchToken;
+  const now=new Date();
+  if(midnightOf(S.date).getTime()===midnightOf(now).getTime()){
+    S.minutes = now.getHours()*60 + now.getMinutes();
+    $('ribbonInput').value = S.minutes;
+  }
+  if(!label){ reverseGeocode(lat,lng).then(n=>{ if(n && token===S.fetchToken){ $('placeName').textContent=n; if(S.day) renderCompare(); } }); }
+  fetchCloud(S.pin).then(c=>{ if(token===S.fetchToken){ S.cloud=c; if(S.day && !$('results').hidden){ renderRibbon(); renderWindows(); renderTimeState(); } } });
+
+  try{
+    const els = await fetchObstructions(S.pin, msg=>{ if(token===S.fetchToken) $('loadingText').textContent=msg; });
+    if(token!==S.fetchToken) return;
+    const frame=localFrame(S.pin);
+    const {buildings, trees} = prepareObstructions(els, frame, +$('assumedH').value);
+    S.buildings=buildings; S.trees=trees;
+    $('loadingText').textContent='Tracing the sun…';
+    await new Promise(r=>setTimeout(r,20));
+    if(token!==S.fetchToken) return;
+    renderFootprints();
+    recompute();
+    updateHash();
+    $('loadingRow').hidden=true; $('results').hidden=false;
+  }catch(e){
+    if(token!==S.fetchToken) return;
+    $('loadingRow').hidden=true;
+    const er=$('errorRow'); er.hidden=false;
+    er.innerHTML=`Couldn't reach the map database (${e.message}). If you're viewing a published/preview version, the sandbox may block map data — the downloaded file in a browser works fully. <button id="retryBtn">Retry</button> <button id="skyBtn">Open-sky times</button>`;
+    $('retryBtn').onclick=()=>setPin(lat,lng,label);
+    $('skyBtn').onclick=()=>{
+      er.hidden=true; S.buildings=[]; S.trees=[]; footprintLayer.clearLayers();
+      recompute(); $('loadingRow').hidden=true; $('results').hidden=false;
+    };
+  }
+}
+
+/* ---------------- geocoding ---------------- */
+async function reverseGeocode(lat,lng){
+  try{
+    const j=await fetchJson(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=17`, 10000);
+    const a=j.address||{};
+    return [a.amenity||a.tourism||a.leisure||a.building, a.road, a.neighbourhood||a.suburb||a.village||a.town||a.city]
+      .filter(Boolean).slice(0,2).join(', ') || j.name || null;
+  }catch{ return null; }
+}
+let searchTimer=null;
+$('searchInput').addEventListener('input', e=>{
+  clearTimeout(searchTimer);
+  const q=e.target.value.trim();
+  if(q.length<3){ $('searchResults').classList.remove('open'); return; }
+  searchTimer=setTimeout(()=>doSearch(q), 450);
+});
+$('searchInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ clearTimeout(searchTimer); doSearch(e.target.value.trim()); }});
+async function doSearch(q){
+  if(!q) return;
+  try{
+    const list=await fetchJson(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`, 10000);
+    const box=$('searchResults'); box.innerHTML='';
+    if(!list.length){ box.innerHTML='<button disabled>No results — try adding the city name</button>'; box.classList.add('open'); return; }
+    for(const item of list){
+      const b=document.createElement('button');
+      const parts=item.display_name.split(', ');
+      b.innerHTML=`<b>${parts[0]}</b><span class="muted">${parts.slice(1,4).join(', ')}</span>`;
+      b.onclick=()=>{
+        box.classList.remove('open');
+        $('searchInput').value=parts[0];
+        map.setView([+item.lat,+item.lon], Math.max(map.getZoom(),17));
+        setPin(+item.lat,+item.lon, parts[0]);
+      };
+      box.appendChild(b);
+    }
+    box.classList.add('open');
+  }catch{ /* silent */ }
+}
+document.addEventListener('click', e=>{ if(!e.target.closest('.search-wrap')) $('searchResults').classList.remove('open'); });
+
+/* ---------------- events ---------------- */
+map.on('click', e=> setPin(e.latlng.lat, e.latlng.lng));
+$('sheetHead').addEventListener('click', ()=> $('sheet').classList.toggle('collapsed'));
+
+function setMinutes(m){
+  S.minutes = Math.min(1439, Math.max(0, Math.round(m)));
+  $('ribbonInput').value = S.minutes;
+  if(S.day){ renderTimeState(); renderShadows(); }
+}
+$('ribbonInput').addEventListener('input', e=> setMinutes(+e.target.value));
+$('hourDown').addEventListener('click', ()=> setMinutes(S.minutes - 60));
+$('hourUp').addEventListener('click', ()=> setMinutes(S.minutes + 60));
+$('btnNow').addEventListener('click', ()=>{
+  const n=new Date();
+  setDate(new Date(), 'chipToday');
+  setMinutes(n.getHours()*60 + n.getMinutes());
+});
+
+const dateInput=$('dateInput');
+function setDate(d, pressedId){
+  S.date=d;
+  dateInput.value=dateKey(d);
+  $('chipToday').setAttribute('aria-pressed', pressedId==='chipToday' ? 'true':'false');
+  if(S.pin && S.day){
+    S.day = computeDayFor(S.date, S.act, S.pin);
+    rerenderDay();
+    updateHash();
+  }
+}
+dateInput.addEventListener('change', ()=>{ const [y,m,dd]=dateInput.value.split('-').map(Number); if(y) setDate(new Date(y,m-1,dd), null); });
+$('chipToday').onclick=()=>setDate(new Date(),'chipToday');
+setDate(new Date(),'chipToday');
+$('ribbonInput').value=S.minutes;
+
+$('assumedH').addEventListener('input', e=> $('assumedHOut').textContent=e.target.value+' m');
+$('assumedH').addEventListener('change', e=>{
+  const v=+e.target.value;
+  for(const b of S.buildings) if(!b.hasData) b.h=v;
+  if(S.pin) recompute();
+});
+
+/* trees toggle */
+$('chipTrees').addEventListener('click', ()=>{
+  S.treesOn = !S.treesOn;
+  const c=$('chipTrees');
+  c.setAttribute('aria-pressed', String(S.treesOn));
+  c.textContent = S.treesOn ? '🌳 Trees on' : '🌳 Trees off';
+  if(S.pin && S.day){ renderFootprints(); recompute(); }
+});
+
+/* compare */
+$('chipCompare').addEventListener('click', ()=>{
+  if(!S.pin || !S.day){ toast('Drop a pin first, then compare'); return; }
+  S.pendingCompare = !S.pendingCompare;
+  $('chipCompare').setAttribute('aria-pressed', String(S.pendingCompare));
+  if(S.pendingCompare) toast('Now tap or search a second spot to compare');
+});
+$('compareClear').addEventListener('click', ()=>{
+  S.compare=null; S.pendingCompare=false;
+  $('chipCompare').setAttribute('aria-pressed','false');
+  if(compareMarker){ compareMarker.remove(); compareMarker=null; }
+  renderCompare();
+});
+
+/* find me */
+$('locateBtn').addEventListener('click', ()=>{
+  if(!navigator.geolocation){ toast('No location support in this browser'); return; }
+  toast('Finding you…', 2000);
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      const {latitude:la, longitude:lo}=pos.coords;
+      map.setView([la,lo], Math.max(map.getZoom(),17));
+      setPin(la,lo);
+    },
+    ()=> toast('Location blocked — this works once the app is hosted on a website'),
+    {enableHighAccuracy:true, timeout:9000}
+  );
+});
+
+
+/* forecast toggle */
+$('chipCloud').addEventListener('click', ()=>{
+  S.forecastOn = !S.forecastOn;
+  const c=$('chipCloud');
+  c.setAttribute('aria-pressed', String(S.forecastOn));
+  c.textContent = S.forecastOn ? '\u2601 Forecast on' : '\u2601 Forecast off';
+  if(S.day){ renderRibbon(); renderWindows(); renderTimeState(); renderCompare(); }
+});
+
+/* ---------------- sun finder ---------------- */
+const finderLayer = L.layerGroup().addTo(map);
+let finderToken = 0;
+const CATS = {cafe:['cafe'], pub:['pub','bar','biergarten'], restaurant:['restaurant'], bench:['bench','picnic_table']};
+const parseHM = v => { if(!v) return null; const [a,b]=v.split(':').map(Number); return isNaN(a)?null:a*60+(b||0); };
+
+$('chipFinder').addEventListener('click', ()=>{
+  const block=$('finderBlock');
+  block.hidden = !block.hidden;
+  $('chipFinder').setAttribute('aria-pressed', String(!block.hidden));
+  if(!block.hidden && !$('findFrom').value){
+    const n=new Date();
+    let f=Math.min(n.getHours(), 19)*60;
+    $('findFrom').value=fmtTime(f); $('findTo').value=fmtTime(Math.min(f+180, 1439));
+  }
+});
+$('findGo').addEventListener('click', runFinder);
+
+function extractVenues(elements, frame, cat){
+  const want=new Set(CATS[cat]);
+  const out=[], seen=new Set();
+  for(const el of elements){
+    const tg=el.tags||{}; const a=VENUE_RE.test(tg.amenity||'')?tg.amenity:(tg.leisure==='picnic_table'?'picnic_table':null);
+    if(!a || !want.has(a)) continue;
+    let lat,lng;
+    if(el.lat!=null){ lat=el.lat; lng=el.lon; }
+    else if(el.center){ lat=el.center.lat; lng=el.center.lon; }
+    else if(el.geometry && el.geometry.length){
+      lat=el.geometry.reduce((s,g)=>s+g.lat,0)/el.geometry.length;
+      lng=el.geometry.reduce((s,g)=>s+g.lon,0)/el.geometry.length;
+    }else continue;
+    const name = tg.name || (a==='bench'?'Bench':a==='picnic_table'?'Picnic table':null);
+    if(!name) continue;
+    const key=name+lat.toFixed(5); if(seen.has(key)) continue; seen.add(key);
+    const p=frame.toXY({lat,lng});
+    out.push({name, lat, lng, x:p.x, y:p.y, outdoor:tg.outdoor_seating==='yes', d:Math.hypot(p.x,p.y)});
+  }
+  out.sort((q,w)=>q.d-w.d);
+  return out.slice(0,40);
+}
+
+async function runFinder(){
+  const cat=$('findCat').value;
+  const fm=parseHM($('findFrom').value), tm=parseHM($('findTo').value);
+  if(fm==null || tm==null || tm<=fm){ toast('Set a valid time window (from before until)'); return; }
+  const c=map.getCenter();
+  const token=++finderToken;
+  $('finderNote').textContent='Searching venues & tracing the sun\u2026';
+  $('finderResults').innerHTML='';
+  finderLayer.clearLayers();
+  try{
+    const els = await fetchArea({lat:c.lat, lng:c.lng}, 450, true);
+    if(token!==finderToken) return;
+    const frame = localFrame({lat:c.lat, lng:c.lng});
+    const {buildings, trees} = prepareObstructions(els, frame, +$('assumedH').value);
+    const obst = S.treesOn ? buildings.concat(trees) : buildings;
+    const venues = extractVenues(els, frame, cat);
+    if(!venues.length){
+      $('finderNote').textContent='Nothing matching in this area \u2014 pan or zoom the map, then Go again.';
+      return;
+    }
+    // precompute sun samples across the window (10-min steps)
+    const base=midnightOf(S.date), samples=[];
+    for(let m=fm; m<tm; m+=10){
+      const {alt, az}=sunPosition(new Date(base.getTime()+m*60000), c.lat, c.lng);
+      samples.push({alt, dx:Math.sin(az*RAD), dy:Math.cos(az*RAD)});
+    }
+    const anySunUp = samples.some(s=>s.alt>0.4);
+    for(const v of venues){
+      const near = obst.filter(o=>Math.hypot(o.cx-v.x, o.cy-v.y)<300 && !pointInPoly({x:v.x,y:v.y}, o.pts));
+      let sun=0;
+      for(const s of samples){
+        if(s.alt<=0.4) continue;
+        let blocked=false;
+        for(const o of near){
+          const hits=rayHitsO(v.x, v.y, s.dx, s.dy, o.pts, 400);
+          for(const d of hits){ if(Math.atan2(o.h, d)*DEG >= s.alt){ blocked=true; break; } }
+          if(blocked) break;
+        }
+        if(!blocked) sun++;
+      }
+      v.score = samples.length ? sun/samples.length : 0;
+    }
+    venues.sort((a,b)=> b.score-a.score || a.d-b.d);
+    if(token!==finderToken) return;
+    renderFinder(venues.slice(0,12), fm, tm, anySunUp);
+  }catch(e){
+    if(token===finderToken) $('finderNote').textContent='Couldn\u2019t search right now \u2014 try again in a moment.';
+  }
+}
+
+function renderFinder(venues, fm, tm, anySunUp){
+  let note = `Sunniest ${fmtTime(fm)}\u2013${fmtTime(tm)} on ${dateKey(S.date)} \u00b7 tap a place to pin it`;
+  if(!anySunUp) note = `The sun is down for that whole window on ${dateKey(S.date)} \u2014 try daylight hours.`;
+  else if(S.forecastOn){
+    const mc = meanCloud(fm, tm);
+    if(mc!=null && mc>=70) note += ' \u00b7 \u2601 heavy cloud forecast';
+  }
+  $('finderNote').textContent = note;
+  const wrap=$('finderResults'); wrap.innerHTML='';
+  for(const v of venues){
+    const pct=Math.round(v.score*100);
+    const col = v.score>=0.7 ? '#F0A311' : v.score>=0.35 ? '#E6BE5C' : '#9AA1AB';
+    const row=document.createElement('button');
+    row.className='frow';
+    row.innerHTML=`<span class="fscore" style="color:${v.score>=0.35?'#C97E06':'#57606C'}">\u2600 ${pct}%</span>
+      <span class="fname">${v.name}${v.outdoor?' \u00b7 \u26f1 outdoor seating':''}</span>
+      <span class="fdist">${Math.round(v.d)} m</span>`;
+    row.onclick=()=>{ map.setView([v.lat,v.lng], Math.max(map.getZoom(),18)); setPin(v.lat, v.lng, v.name); };
+    wrap.appendChild(row);
+    L.circleMarker([v.lat,v.lng], {radius:8, color:'#201B14', weight:1.5, fillColor:col, fillOpacity:.95})
+      .bindTooltip(`${v.name} \u00b7 \u2600 ${pct}%`)
+      .on('click', ()=>{ map.setView([v.lat,v.lng], Math.max(map.getZoom(),18)); setPin(v.lat, v.lng, v.name); })
+      .addTo(finderLayer);
+  }
+}
+
+/* ---------------- toast + compass ---------------- */
+let toastTimer=null;
+function toast(msg, ms=3800){
+  const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), ms);
+}
+let compassOn=false, gotHeading=false, hasAbsolute=false, lastBearingAt=0;
+function onOrient(e){
+  if(e.type==='deviceorientationabsolute') hasAbsolute=true;
+  else if(hasAbsolute) return;
+  let h = null;
+  if(e.webkitCompassHeading != null) h = e.webkitCompassHeading;
+  else if(e.alpha != null) h = (360 - e.alpha) % 360;
+  if(h == null) return;
+  gotHeading = true;
+  const now = performance.now();
+  if(now - lastBearingAt < 120) return;
+  lastBearingAt = now;
+  if(typeof map.setBearing === 'function') map.setBearing(-h);
+}
+function compassOff(){
+  compassOn=false;
+  $('compassBtn').setAttribute('aria-pressed','false');
+  window.removeEventListener('deviceorientationabsolute', onOrient, true);
+  window.removeEventListener('deviceorientation', onOrient, true);
+  if(typeof map.setBearing === 'function') map.setBearing(0);
+}
+async function compassToggle(){
+  if(typeof map.setBearing !== 'function'){ toast('Map rotation is blocked in this environment'); return; }
+  if(compassOn){ compassOff(); return; }
+  try{
+    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+      const p = await DeviceOrientationEvent.requestPermission();
+      if(p!=='granted'){ toast('Compass permission was denied'); return; }
+    }
+  }catch{ toast('Compass permission was denied'); return; }
+  compassOn=true; gotHeading=false; hasAbsolute=false;
+  $('compassBtn').setAttribute('aria-pressed','true');
+  window.addEventListener('deviceorientationabsolute', onOrient, true);
+  window.addEventListener('deviceorientation', onOrient, true);
+  toast('Compass on — the map now turns as you do');
+  setTimeout(()=>{
+    if(compassOn && !gotHeading){
+      compassOff();
+      toast('No compass signal — your browser is blocking motion sensors for this file. Hosting it on a website fixes this.');
+    }
+  }, 3500);
+}
+$('compassBtn').addEventListener('click', compassToggle);
+
+/* ---------------- ambient sun over the city (no pin yet) ---------------- */
+function renderAmbient(){
+  if(S.pin) return;
+  coneLayer.clearLayers(); arcLayer.clearLayers();
+  const c = map.getCenter(), now = new Date();
+  const frame = localFrame({lat:c.lat, lng:c.lng});
+  const spanM = (map.getBounds().getNorth() - map.getBounds().getSouth()) * 111320;
+  const R = Math.max(40, spanM * 0.16);
+  const base = midnightOf(now), pts=[];
+  for(let m=0; m<1440; m+=20){
+    const p = sunPosition(new Date(base.getTime()+m*60000), c.lat, c.lng);
+    if(p.alt > 0){
+      const ll = frame.toLL({x:Math.sin(p.az*RAD)*R*1.28, y:Math.cos(p.az*RAD)*R*1.28});
+      pts.push([ll.lat, ll.lng]);
+    }
+  }
+  if(pts.length) L.polyline(pts, {color:'#C97E06', weight:1.5, dashArray:'1 7', opacity:.85, interactive:false}).addTo(arcLayer);
+  const {alt, az} = sunPosition(now, c.lat, c.lng);
+  if(alt > 0.4){
+    const spread=11, conePts=[{x:0,y:0}];
+    for(let a=az-spread; a<=az+spread; a+=2.5) conePts.push({x:Math.sin(a*RAD)*R, y:Math.cos(a*RAD)*R});
+    L.polygon(conePts.map(p=>{const ll=frame.toLL(p); return [ll.lat,ll.lng];}),
+      {stroke:false, fillColor:'#F0A311', fillOpacity:.42, interactive:false}).addTo(coneLayer);
+    const tip = frame.toLL({x:Math.sin(az*RAD)*R*1.28, y:Math.cos(az*RAD)*R*1.28});
+    L.circleMarker([tip.lat,tip.lng], {radius:8, color:'#201B14', weight:1.5, fillColor:'#F0A311', fillOpacity:1, interactive:false}).addTo(coneLayer);
+    L.marker([tip.lat,tip.lng], {interactive:false, icon:L.divIcon({className:'', iconAnchor:[0,-14],
+      html:`<span class="sun-tag">Sun now · ${compass(az)} · ${Math.round(alt)}° high</span>`})}).addTo(coneLayer);
+  }else{
+    const c2 = map.getCenter();
+    L.marker([c2.lat, c2.lng], {interactive:false, icon:L.divIcon({className:'', iconAnchor:[0,0],
+      html:`<span class="sun-tag">Sun is down — tap anywhere for tomorrow's light</span>`})}).addTo(coneLayer);
+  }
+}
+map.on('moveend zoomend', renderAmbient);
+renderAmbient();
+setInterval(renderAmbient, 60000);
+
+/* ---------------- shared-link startup ---------------- */
+(function initFromHash(){
+  const m = location.hash.match(/p=(-?[\d.]+),(-?[\d.]+)(?:&d=(\d{4}-\d{2}-\d{2}))?/);
+  if(!m) return;
+  const la=+m[1], lo=+m[2];
+  if(m[3]){ const [y,mo,dd]=m[3].split('-').map(Number); setDate(new Date(y,mo-1,dd), null); }
+  map.setView([la,lo], 17);
+  setTimeout(()=>setPin(la,lo), 300);
+})();
+</script>
+</body>
+</html>
