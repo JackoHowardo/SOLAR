@@ -50,7 +50,8 @@
     border-top:1.5px solid var(--ink); border-radius:20px 20px 0 0; box-shadow:0 -4px 24px rgba(32,27,20,.14);
     max-height:64vh; display:flex; flex-direction:column; transition:transform .28s cubic-bezier(.4,0,.2,1);}
   .sheet.collapsed{transform:translateY(calc(100% - 118px));}
-  .sheet-head{padding:10px 20px 8px; cursor:pointer; flex:none; position:relative;}
+  .sheet-head{padding:10px 20px 8px; cursor:grab; flex:none; position:relative; touch-action:none; user-select:none;}
+  .sheet-head:active{cursor:grabbing;}
   .grab{width:40px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 10px;}
   .ver{position:absolute; top:10px; right:16px; font-size:9.5px; font-weight:700; color:var(--ink-soft); letter-spacing:.5px;}
   .place-row{display:flex; align-items:baseline; justify-content:space-between; gap:12px;}
@@ -98,6 +99,10 @@
 
   /* ---------- sun finder ---------- */
   .finder{margin-top:10px; border:1.5px solid var(--ink); border-radius:12px; padding:12px 14px; background:var(--cream);}
+  .seg{display:flex; border:1.5px solid var(--ink); border-radius:999px; overflow:hidden; margin-bottom:10px; width:fit-content;}
+  .seg-btn{font:inherit; font-size:12px; font-weight:700; padding:6px 14px; border:none; background:var(--paper); color:var(--ink); cursor:pointer;}
+  .seg-btn.active{background:var(--ink); color:var(--cream);}
+  .seg-btn:first-child{border-right:1.5px solid var(--ink);}
   .finder-row{display:flex; gap:7px; align-items:center; flex-wrap:wrap; font-size:12.5px;}
   .finder-row select, .finder-row input[type=time]{font:inherit; font-size:12.5px; border:1.5px solid var(--ink);
     border-radius:999px; padding:5px 9px; background:var(--paper); color:var(--ink); outline:none;}
@@ -108,6 +113,13 @@
   .fscore{font-weight:700; min-width:46px; font-variant-numeric:tabular-nums;}
   .fname{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .fdist{font-size:11px; color:var(--ink-soft); white-space:nowrap;}
+
+  /* ---------- swipe hint ---------- */
+  .swipe-hint{display:flex; justify-content:center; padding:8px 0 0; opacity:.6;}
+  .swipe-hint svg{animation:hintBounce 1.6s ease-in-out infinite;}
+  @keyframes hintBounce{0%,100%{transform:translateY(0);} 50%{transform:translateY(-4px);}}
+  .sheet[data-state="full"] .swipe-hint{display:none;}
+  @media (prefers-reduced-motion:reduce){ .swipe-hint svg{animation:none;} }
 
   /* ---------- year strip ---------- */
   .year-block{margin-top:16px;}
@@ -229,7 +241,15 @@
         <button class="chip" id="chipFinder" aria-pressed="false">☀ Find sun</button>
       </div>
 
+      <div class="swipe-hint" id="swipeHint" aria-hidden="true">
+        <svg width="20" height="11" viewBox="0 0 20 11"><path d="M2 9l8-8 8 8" fill="none" stroke="#9AA1AB" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
       <div class="finder" id="finderBlock" hidden>
+        <div class="seg" id="findMode" role="group" aria-label="Find sun or shade">
+          <button class="seg-btn active" data-mode="sun" type="button">☀ Sun</button>
+          <button class="seg-btn" data-mode="shade" type="button">🌥 Shade</button>
+        </div>
         <div class="finder-row">
           <select id="findCat" aria-label="What kind of place">
             <option value="pub">Pubs &amp; beer gardens</option>
@@ -294,7 +314,10 @@ const map = L.map('map', {zoomControl:true, worldCopyJump:true, rotate:true, rot
 
 // Shadows live in their own pane: solid polygons inside, one opacity applied to the
 // merged result — so 100 overlapping shadows read as one shadow, like real shade.
-const shadowPane = map.createPane('shadowPane');
+// Named 'sunShadowPane' (not 'shadowPane') and parented under the rotate plugin's
+// own rotating pane, so it pans/rotates in lockstep with tiles instead of being
+// silently mis-transformed by the rotate plugin's built-in shadowPane handling.
+const shadowPane = map.createPane('sunShadowPane', map._rotatePane);
 shadowPane.style.opacity = 0.26;
 shadowPane.style.zIndex = 350;
 shadowPane.style.pointerEvents = 'none';
@@ -706,7 +729,7 @@ function renderShadows(){
     const hull = convexHull(b.pts.concat(proj));
     if(hull.length<3) continue;
     L.polygon(hull.map(p=>{const ll=frame.toLL(p); return [ll.lat,ll.lng];}),
-      {pane:'shadowPane', stroke:false, fillColor:'#57606C', fillOpacity:1, interactive:false}).addTo(shadowLayer);
+      {pane:'sunShadowPane', stroke:false, fillColor:'#57606C', fillOpacity:1, interactive:false}).addTo(shadowLayer);
   }
   const coneR=52, spread=11;
   const conePts=[{x:0,y:0}];
@@ -759,10 +782,13 @@ async function setPin(lat, lng, label){
   S.pin={lat,lng};
   if(pinMarker) pinMarker.remove();
   pinMarker=L.marker([lat,lng],{icon:pinIcon, keyboard:false}).addTo(map);
-  $('sheet').classList.remove('collapsed');
+  // bring the spot front and center, zoomed in enough to read the street clearly
+  map.setView([lat,lng], Math.max(map.getZoom(), 18), {animate:true});
   $('emptyMsg').hidden=true; $('results').hidden=true; $('errorRow').hidden=true;
   $('loadingRow').hidden=false; $('totalChip').hidden=true;
   $('placeName').textContent = label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  goToSheetState('peek');
+  nudgeAbovePeek();
 
   const token=++S.fetchToken;
   const now=new Date();
@@ -786,15 +812,20 @@ async function setPin(lat, lng, label){
     recompute();
     updateHash();
     $('loadingRow').hidden=true; $('results').hidden=false;
+    goToSheetState('peek');
+    nudgeAbovePeek();
   }catch(e){
     if(token!==S.fetchToken) return;
     $('loadingRow').hidden=true;
     const er=$('errorRow'); er.hidden=false;
     er.innerHTML=`Couldn't reach the map database (${e.message}). If you're viewing a published/preview version, the sandbox may block map data — the downloaded file in a browser works fully. <button id="retryBtn">Retry</button> <button id="skyBtn">Open-sky times</button>`;
+    goToSheetState('peek');
+    nudgeAbovePeek();
     $('retryBtn').onclick=()=>setPin(lat,lng,label);
     $('skyBtn').onclick=()=>{
       er.hidden=true; S.buildings=[]; S.trees=[]; footprintLayer.clearLayers();
       recompute(); $('loadingRow').hidden=true; $('results').hidden=false;
+      goToSheetState('peek');
     };
   }
 }
@@ -829,7 +860,6 @@ async function doSearch(q){
       b.onclick=()=>{
         box.classList.remove('open');
         $('searchInput').value=parts[0];
-        map.setView([+item.lat,+item.lon], Math.max(map.getZoom(),17));
         setPin(+item.lat,+item.lon, parts[0]);
       };
       box.appendChild(b);
@@ -841,7 +871,6 @@ document.addEventListener('click', e=>{ if(!e.target.closest('.search-wrap')) $(
 
 /* ---------------- events ---------------- */
 map.on('click', e=> setPin(e.latlng.lat, e.latlng.lng));
-$('sheetHead').addEventListener('click', ()=> $('sheet').classList.toggle('collapsed'));
 
 function setMinutes(m){
   S.minutes = Math.min(1439, Math.max(0, Math.round(m)));
@@ -910,7 +939,6 @@ $('locateBtn').addEventListener('click', ()=>{
   navigator.geolocation.getCurrentPosition(
     pos=>{
       const {latitude:la, longitude:lo}=pos.coords;
-      map.setView([la,lo], Math.max(map.getZoom(),17));
       setPin(la,lo);
     },
     ()=> toast('Location blocked — this works once the app is hosted on a website'),
@@ -930,9 +958,16 @@ $('chipCloud').addEventListener('click', ()=>{
 
 /* ---------------- sun finder ---------------- */
 const finderLayer = L.layerGroup().addTo(map);
-let finderToken = 0;
+let finderToken = 0, finderMode = 'sun';
 const CATS = {cafe:['cafe'], pub:['pub','bar','biergarten'], restaurant:['restaurant'], bench:['bench','picnic_table']};
 const parseHM = v => { if(!v) return null; const [a,b]=v.split(':').map(Number); return isNaN(a)?null:a*60+(b||0); };
+
+document.querySelectorAll('#findMode .seg-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    finderMode = btn.dataset.mode;
+    document.querySelectorAll('#findMode .seg-btn').forEach(b=>b.classList.toggle('active', b===btn));
+  });
+});
 
 $('chipFinder').addEventListener('click', ()=>{
   const block=$('finderBlock');
@@ -1011,39 +1046,129 @@ async function runFinder(){
       }
       v.score = samples.length ? sun/samples.length : 0;
     }
-    venues.sort((a,b)=> b.score-a.score || a.d-b.d);
+    const shade = finderMode==='shade';
+    venues.sort((a,b)=> shade ? (a.score-b.score || a.d-b.d) : (b.score-a.score || a.d-b.d));
     if(token!==finderToken) return;
-    renderFinder(venues.slice(0,12), fm, tm, anySunUp);
+    renderFinder(venues.slice(0,12), fm, tm, anySunUp, finderMode);
   }catch(e){
     if(token===finderToken) $('finderNote').textContent='Couldn\u2019t search right now \u2014 try again in a moment.';
   }
 }
 
-function renderFinder(venues, fm, tm, anySunUp){
-  let note = `Sunniest ${fmtTime(fm)}\u2013${fmtTime(tm)} on ${dateKey(S.date)} \u00b7 tap a place to pin it`;
-  if(!anySunUp) note = `The sun is down for that whole window on ${dateKey(S.date)} \u2014 try daylight hours.`;
+function renderFinder(venues, fm, tm, anySunUp, mode){
+  const shade = mode==='shade';
+  const modeIcon = shade ? '\ud83c\udf25' : '\u2600';
+  let note = `${shade?'Shadiest':'Sunniest'} ${fmtTime(fm)}\u2013${fmtTime(tm)} on ${dateKey(S.date)} \u00b7 tap a place to pin it`;
+  if(!anySunUp) note = shade
+    ? `The sun is down for that whole window on ${dateKey(S.date)} \u2014 everywhere's shaded already.`
+    : `The sun is down for that whole window on ${dateKey(S.date)} \u2014 try daylight hours.`;
   else if(S.forecastOn){
     const mc = meanCloud(fm, tm);
-    if(mc!=null && mc>=70) note += ' \u00b7 \u2601 heavy cloud forecast';
+    if(mc!=null && mc>=70) note += shade ? ' \u00b7 \u2601 cloudy anyway, most spots will feel shaded' : ' \u00b7 \u2601 heavy cloud forecast';
   }
   $('finderNote').textContent = note;
   const wrap=$('finderResults'); wrap.innerHTML='';
   for(const v of venues){
-    const pct=Math.round(v.score*100);
-    const col = v.score>=0.7 ? '#F0A311' : v.score>=0.35 ? '#E6BE5C' : '#9AA1AB';
+    const pct = Math.round((shade ? (1-v.score) : v.score) * 100);
+    const good = pct>=70, mid = pct>=35;
+    const col = shade
+      ? (good ? '#5C7A99' : mid ? '#A9BAC7' : '#E7D9BE')
+      : (good ? '#F0A311' : mid ? '#E6BE5C' : '#9AA1AB');
+    const txtCol = mid ? (shade?'#3E5A73':'#C97E06') : '#57606C';
     const row=document.createElement('button');
     row.className='frow';
-    row.innerHTML=`<span class="fscore" style="color:${v.score>=0.35?'#C97E06':'#57606C'}">\u2600 ${pct}%</span>
+    row.innerHTML=`<span class="fscore" style="color:${txtCol}">${modeIcon} ${pct}%</span>
       <span class="fname">${v.name}${v.outdoor?' \u00b7 \u26f1 outdoor seating':''}</span>
       <span class="fdist">${Math.round(v.d)} m</span>`;
-    row.onclick=()=>{ map.setView([v.lat,v.lng], Math.max(map.getZoom(),18)); setPin(v.lat, v.lng, v.name); };
+    row.onclick=()=>{ setPin(v.lat, v.lng, v.name); };
     wrap.appendChild(row);
     L.circleMarker([v.lat,v.lng], {radius:8, color:'#201B14', weight:1.5, fillColor:col, fillOpacity:.95})
-      .bindTooltip(`${v.name} \u00b7 \u2600 ${pct}%`)
-      .on('click', ()=>{ map.setView([v.lat,v.lng], Math.max(map.getZoom(),18)); setPin(v.lat, v.lng, v.name); })
+      .bindTooltip(`${v.name} \u00b7 ${modeIcon} ${pct}%`)
+      .on('click', ()=>{ setPin(v.lat, v.lng, v.name); })
       .addTo(finderLayer);
   }
 }
+
+/* ---------------- draggable three-state sheet ---------------- */
+// States: 'collapsed' (place name only) → 'peek' (through the toggle chips,
+// the default once a spot is picked) → 'full' (everything, scrolls internally).
+let sheetState = 'collapsed';
+function sheetOffsets(){
+  const sheet=$('sheet'), total=sheet.offsetHeight, headH=$('sheetHead').offsetHeight;
+  let peekH = headH;
+  if(!$('results').hidden){
+    const rows=document.querySelectorAll('#results .chips');
+    if(rows.length){ const last=rows[rows.length-1]; peekH = last.offsetTop + last.offsetHeight + 26; }
+  }else if(!$('loadingRow').hidden){
+    peekH = $('loadingRow').offsetTop + $('loadingRow').offsetHeight + 16;
+  }else if(!$('errorRow').hidden){
+    peekH = $('errorRow').offsetTop + $('errorRow').offsetHeight + 16;
+  }
+  return { collapsed: Math.max(0, total-headH), peek: Math.max(0, total-Math.min(peekH,total)), full: 0, peekH: Math.min(peekH,total) };
+}
+// Shifts the map so whatever's at the pin sits centered in the visible area
+// ABOVE the sheet, instead of half-hidden behind it.
+function nudgeAbovePeek(){
+  requestAnimationFrame(()=>{
+    const h = map.getSize().y;
+    const peekVisible = Math.min(sheetOffsets().peekH, h*0.75);
+    const shift = peekVisible/2;
+    if(shift > 10) map.panBy([0, shift], {animate:true, duration:0.35});
+  });
+}
+function goToSheetState(state, withTransition=true){
+  sheetState = state;
+  const sheet=$('sheet');
+  sheet.style.transition = withTransition ? '' : 'none';
+  sheet.style.transform = `translateY(${sheetOffsets()[state]}px)`;
+  sheet.dataset.state = state;
+}
+(function setupDrag(){
+  const head=$('sheetHead'), sheet=$('sheet');
+  let dragging=false, startY=0, baseY=0, lastY=0, lastT=0, vel=0;
+  head.addEventListener('pointerdown', e=>{
+    dragging=true; startY=e.clientY; lastY=e.clientY; lastT=performance.now(); vel=0;
+    baseY = sheetOffsets()[sheetState];
+    sheet.style.transition='none';
+    try{ head.setPointerCapture(e.pointerId); }catch{}
+  });
+  head.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const offs=sheetOffsets();
+    let px = baseY + (e.clientY - startY);
+    px = Math.max(offs.full, Math.min(offs.collapsed, px));
+    sheet.style.transform = `translateY(${px}px)`;
+    const now=performance.now(), dt=now-lastT;
+    if(dt>0) vel = (e.clientY-lastY)/dt;
+    lastY=e.clientY; lastT=now;
+  });
+  function endDrag(e){
+    if(!dragging) return;
+    dragging=false;
+    const dyTotal = (e.clientY ?? lastY) - startY;
+    if(Math.abs(dyTotal) < 6){ // tap: cycle to the next state
+      const next = {collapsed:'peek', peek:'full', full:'collapsed'};
+      goToSheetState(next[sheetState], true);
+      return;
+    }
+    const offs=sheetOffsets(), order=['full','peek','collapsed'];
+    let idx=order.indexOf(sheetState);
+    if(vel > 0.55 && idx < order.length-1) idx++;
+    else if(vel < -0.55 && idx > 0) idx--;
+    else{
+      const m=/translateY\(([-\d.]+)px\)/.exec(sheet.style.transform);
+      const px = m ? parseFloat(m[1]) : offs[sheetState];
+      let best=sheetState, bestD=Infinity;
+      for(const s of order){ const d=Math.abs(offs[s]-px); if(d<bestD){bestD=d; best=s;} }
+      idx = order.indexOf(best);
+    }
+    goToSheetState(order[idx], true);
+  }
+  head.addEventListener('pointerup', endDrag);
+  head.addEventListener('pointercancel', endDrag);
+})();
+window.addEventListener('resize', ()=> goToSheetState(sheetState, false));
+goToSheetState('collapsed', false);
 
 /* ---------------- toast + compass ---------------- */
 let toastTimer=null;
@@ -1138,9 +1263,9 @@ setInterval(renderAmbient, 60000);
   if(!m) return;
   const la=+m[1], lo=+m[2];
   if(m[3]){ const [y,mo,dd]=m[3].split('-').map(Number); setDate(new Date(y,mo-1,dd), null); }
-  map.setView([la,lo], 17);
-  setTimeout(()=>setPin(la,lo), 300);
+  setTimeout(()=>setPin(la,lo), 100);
 })();
 </script>
 </body>
 </html>
+
