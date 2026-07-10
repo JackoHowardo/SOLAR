@@ -274,7 +274,995 @@
         <div class="ribbon-wrap">
           <div class="ribbon"><div class="ribbon-fill" id="ribbonFill"></div></div>
           <div class="ribbon-cursor" id="ribbonCursor"></div>
-          <input class="ribbon-input" id="ribbonInput" type="range" min="0" max="1439" step="1" value="720" aria-label=…11810 tokens truncated…eet ---------------- */
+          <input class="ribbon-input" id="ribbonInput" type="range" min="0" max="1439" step="1" value="720" aria-label="Time of day">
+        </div>
+        <div class="ribbon-hours"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      </div>
+
+      <div class="chips">
+        <label class="chip chip-date"><input type="date" id="dateInput" aria-label="Date"></label>
+        <button class="chip" id="chipToday">Today</button>
+      </div>
+      <div class="chips">
+        <button class="chip" id="chipTrees" aria-pressed="true">ðŸŒ³ Trees on</button>
+        <button class="chip" id="chipCloud" aria-pressed="true">â˜ Forecast on</button>
+        <button class="chip" id="chipCompare" aria-pressed="false">â‡„ Compare</button>
+        <button class="chip" id="chipFinder" aria-pressed="false">â˜€ Find sun</button>
+      </div>
+
+      <div class="swipe-hint" id="swipeHint" aria-hidden="true">
+        <svg width="20" height="11" viewBox="0 0 20 11"><path d="M2 9l8-8 8 8" fill="none" stroke="#9AA1AB" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="finder" id="finderBlock" hidden>
+        <div class="seg" id="findMode" role="group" aria-label="Find sun or shade">
+          <button class="seg-btn active" data-mode="sun" type="button">â˜€ Sun</button>
+          <button class="seg-btn" data-mode="shade" type="button">ðŸŒ¥ Shade</button>
+        </div>
+        <div class="finder-row">
+          <select id="findCat" aria-label="What kind of place">
+            <option value="pub">Pubs &amp; beer gardens</option>
+            <option value="cafe">CafÃ©s</option>
+            <option value="restaurant">Restaurants</option>
+            <option value="bench">Benches &amp; picnic tables</option>
+          </select>
+          <input type="time" id="findFrom" aria-label="From">
+          <span>â€“</span>
+          <input type="time" id="findTo" aria-label="Until">
+          <button class="tbtn tbtn-now" id="findGo">Go</button>
+        </div>
+        <div class="finder-note" id="finderNote">Searches what's on the map right now, for the date picked above.</div>
+        <div id="finderResults"></div>
+      </div>
+
+      <div class="compare-block" id="compareBlock" hidden>
+        <div class="compare-head">
+          <span class="sec-title">Comparing</span>
+          <button class="compare-x" id="compareClear">clear</button>
+        </div>
+        <div id="compareRows"></div>
+      </div>
+
+      <div class="windows" id="windowsList"></div>
+
+      <div class="year-block">
+        <span class="sec-title">Year here â€” sun hours on the 21st of each month</span>
+        <div class="year-bars" id="yearBars"></div>
+        <div class="year-note" id="yearNote"></div>
+      </div>
+
+      <div class="height-row">
+        <span>Unmapped building height</span>
+        <input type="range" id="assumedH" min="4" max="24" step="1" value="9" aria-label="Assumed height for buildings with no data">
+        <output id="assumedHOut">9 m</output>
+      </div>
+      <details class="note"><summary><b>Accuracy and limitations</b></summary><p>Results are estimates. OpenStreetMap data may be incomplete; some building and tree heights are assumed; terrain is not currently modelled; and weather forecasts are only available for supported near-term dates.</p></details>
+    </div>
+    <div class="loading-row" id="loadingRow" hidden><div class="spin"></div><span id="loadingText">Fetching buildingsâ€¦</span></div>
+    <div class="error" id="errorRow" hidden></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   SUN SPOT v7 â€” where & when the sun hits a point
+   Solar position: NOAA-style astronomy (no libraries)
+   Obstructions: OSM buildings + trees via Overpass, OSM API fallback
+   Cloud forecast: Open-Meteo (16 days ahead)
+   ============================================================ */
+
+const $ = id => document.getElementById(id);
+const esc = value => String(value).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const RAD = Math.PI/180, DEG = 180/Math.PI;
+const GOLDEN_ALT = 7; // sun below this altitude (but up) = golden light
+
+/* ---------------- map ---------------- */
+const map = L.map('map', {zoomControl:true, worldCopyJump:true, rotate:true, rotateControl:false, touchRotate:false, bearing:0})
+  .setView([51.8985, -8.4756], 15); // Cork, obviously
+
+// Shadows live in their own pane: solid polygons inside, one opacity applied to the
+// merged result â€” so 100 overlapping shadows read as one shadow, like real shade.
+// Named 'sunShadowPane' (not 'shadowPane') and parented under the rotate plugin's
+// own rotating pane, so it pans/rotates in lockstep with tiles instead of being
+// silently mis-transformed by the rotate plugin's built-in shadowPane handling.
+const shadowPane = map.createPane('sunShadowPane', map._rotatePane);
+shadowPane.style.opacity = 0.26;
+shadowPane.style.zIndex = 350;
+shadowPane.style.pointerEvents = 'none';
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a> Weather: <a href="https://open-meteo.com/">Open-Meteo</a>',
+  subdomains:'abcd', maxZoom:20
+}).addTo(map);
+
+const pinIcon = L.divIcon({
+  className:'pin-icon', iconSize:[30,40], iconAnchor:[15,38],
+  html:`<svg width="30" height="40" viewBox="0 0 30 40"><path d="M15 1C7.8 1 2 6.8 2 14c0 9.8 13 25 13 25s13-15.2 13-25C28 6.8 22.2 1 15 1z" fill="#F0A311" stroke="#201B14" stroke-width="2"/><circle cx="15" cy="14" r="5" fill="#FFFDF8" stroke="#201B14" stroke-width="2"/></svg>`
+});
+const pinIconB = L.divIcon({
+  className:'pin-icon', iconSize:[26,35], iconAnchor:[13,33],
+  html:`<svg width="26" height="35" viewBox="0 0 30 40"><path d="M15 1C7.8 1 2 6.8 2 14c0 9.8 13 25 13 25s13-15.2 13-25C28 6.8 22.2 1 15 1z" fill="#57606C" stroke="#201B14" stroke-width="2"/><circle cx="15" cy="14" r="5" fill="#FFFDF8" stroke="#201B14" stroke-width="2"/></svg>`
+});
+
+let pinMarker=null, compareMarker=null,
+    shadowLayer=L.layerGroup().addTo(map),
+    footprintLayer=L.layerGroup().addTo(map),
+    coneLayer=L.layerGroup().addTo(map),
+    arcLayer=L.layerGroup().addTo(map);
+
+/* ---------------- state ---------------- */
+const S = {
+  pin:null,
+  date:new Date(),
+  minutes: new Date().getHours()*60 + new Date().getMinutes(),
+  buildings:[], trees:[], treesOn:true, forecastOn:true,
+  act:[],                 // active obstruction set used for the maths
+  day:null,               // {samples, azAt, altAt, segments, sunrise, sunset, total}
+  insideBuilding:false,
+  cloud:{},               // 'YYYY-MM-DD' -> [24 hourly cloud %]
+  timezone:'Europe/Dublin',
+  timezoneReady:false,
+  preserveDate:false,
+  compare:null,           // {label, pin, day}
+  pendingCompare:false,
+  scan:null,               // {pts, date} of the last zone scan, for rescanning
+  fetchToken:0, yearToken:0
+};
+
+/* ---------------- solar position (NOAA-style) ---------------- */
+function sunPosition(date, lat, lng){
+  const jd = date.getTime()/86400000 + 2440587.5;
+  const d  = jd - 2451545.0;
+  const g  = RAD*(((357.529 + 0.98560028*d)%360+360)%360);
+  const q  = ((280.459 + 0.98564736*d)%360+360)%360;
+  const Ld = (q + 1.915*Math.sin(g) + 0.020*Math.sin(2*g));
+  const Lr = RAD*(((Ld)%360+360)%360);
+  const e  = RAD*(23.439 - 0.00000036*d);
+  const RA = Math.atan2(Math.cos(e)*Math.sin(Lr), Math.cos(Lr));
+  const dec= Math.asin(Math.sin(e)*Math.sin(Lr));
+  const gmst=(18.697374558 + 24.06570982441908*d)%24;
+  const lst =(gmst + lng/15)%24;
+  let H = lst*15 - RA*DEG;
+  H = ((H+540)%360)-180;
+  const Hr = H*RAD, la = lat*RAD;
+  const alt = Math.asin(Math.sin(la)*Math.sin(dec) + Math.cos(la)*Math.cos(dec)*Math.cos(Hr));
+  let cosAz = (Math.sin(dec) - Math.sin(alt)*Math.sin(la)) / (Math.cos(alt)*Math.cos(la));
+  cosAz = Math.min(1, Math.max(-1, cosAz));
+  let az = Math.acos(cosAz)*DEG;
+  if (Math.sin(Hr) > 0) az = 360 - az;
+  return {alt: alt*DEG, az};
+}
+
+/* ---------------- geometry helpers ---------------- */
+function localFrame(pin){
+  const mLat = 111320, mLng = 111320*Math.cos(pin.lat*RAD);
+  return {
+    toXY: ll => ({x:(ll.lng-pin.lng)*mLng, y:(ll.lat-pin.lat)*mLat}),
+    toLL: p  => ({lat:pin.lat + p.y/mLat, lng:pin.lng + p.x/mLng})
+  };
+}
+function pointInPoly(p, pts){
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const a=pts[i],b=pts[j];
+    if(((a.y>p.y)!==(b.y>p.y)) && (p.x < (b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)) inside=!inside;
+  }
+  return inside;
+}
+function rayHitsO(ox, oy, dx, dy, pts, maxDist){
+  const hits=[];
+  for(let i=0;i<pts.length;i++){
+    const a=pts[i], b=pts[(i+1)%pts.length];
+    const ax=a.x-ox, ay=a.y-oy;
+    const ex=b.x-a.x, ey=b.y-a.y;
+    const det = -dx*ey + dy*ex;
+    if (Math.abs(det) < 1e-9) continue;
+    const tt = (-ax*ey + ay*ex)/det;
+    const ss = ( dx*ay - dy*ax)/det;
+    if (tt > 0.5 && tt < maxDist && ss >= 0 && ss <= 1) hits.push(tt);
+  }
+  return hits;
+}
+const rayHits = (dx, dy, pts, maxDist) => rayHitsO(0, 0, dx, dy, pts, maxDist);
+function convexHull(points){
+  const pts=[...points].sort((a,b)=>a.x-b.x||a.y-b.y);
+  if(pts.length<3) return pts;
+  const cross=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x);
+  const lower=[], upper=[];
+  for(const p of pts){ while(lower.length>=2 && cross(lower[lower.length-2],lower[lower.length-1],p)<=0) lower.pop(); lower.push(p); }
+  for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; while(upper.length>=2 && cross(upper[upper.length-2],upper[upper.length-1],p)<=0) upper.pop(); upper.push(p); }
+  return lower.slice(0,-1).concat(upper.slice(0,-1));
+}
+const compass = az => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(az/22.5)%16];
+const fmtTime = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(Math.round(m)%60).padStart(2,'0')}`;
+const fmtDur = m => m>=60 ? `${Math.floor(m/60)} h ${String(Math.round(m%60)).padStart(2,'0')} m` : `${Math.round(m)} m`;
+const dateKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function zonedParts(date, timeZone){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date);
+  return Object.fromEntries(parts.filter(p=>p.type!=='literal').map(p=>[p.type,+p.value]));
+}
+function zonedDateKey(date, timeZone=S.timezone){ const p=zonedParts(date,timeZone); return `${p.year}-${String(p.month).padStart(2,'0')}-${String(p.day).padStart(2,'0')}`; }
+function zonedMinutes(date, timeZone=S.timezone){ const p=zonedParts(date,timeZone); return p.hour*60+p.minute; }
+function civilDateTimeToUtc(key, minutes, timeZone=S.timezone){
+  const [year,month,day]=key.split('-').map(Number), hour=Math.floor(minutes/60), minute=minutes%60;
+  const target=Date.UTC(year,month-1,day,hour,minute); let guess=target;
+  for(let i=0;i<4;i++){
+    const p=zonedParts(new Date(guess),timeZone);
+    const represented=Date.UTC(p.year,p.month-1,p.day,p.hour,p.minute);
+    const next=guess+(target-represented); if(next===guess) break; guess=next;
+  }
+  return new Date(guess);
+}
+function dateFromKey(key){ const [y,m,d]=key.split('-').map(Number); return new Date(y,m-1,d,12); }
+
+/* ---------------- obstruction data (buildings + trees) ---------------- */
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter'
+];
+async function fetchJson(url, ms){
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), ms);
+  try{
+    const res = await fetch(url, {signal:ctrl.signal});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return await res.json();
+  } finally { clearTimeout(timer); }
+}
+const VENUE_RE = /^(cafe|bar|pub|biergarten|restaurant|bench)$/;
+async function fetchFromOsmApi(pin, radius=320, withVenues=false){
+  const dLat = radius/111320, dLng = radius/(111320*Math.cos(pin.lat*RAD));
+  const bbox = [pin.lng-dLng, pin.lat-dLat, pin.lng+dLng, pin.lat+dLat].map(v=>v.toFixed(6)).join(',');
+  const j = await fetchJson(`https://api.openstreetmap.org/api/0.6/map.json?bbox=${bbox}`, 30000);
+  const nodes = new Map();
+  for(const el of j.elements) if(el.type==='node') nodes.set(el.id, {lat:el.lat, lon:el.lon, tags:el.tags});
+  const out = [];
+  for(const el of j.elements){
+    if(el.type==='node' && el.tags &&
+       (el.tags.natural==='tree' || (withVenues && (VENUE_RE.test(el.tags.amenity||'') || el.tags.leisure==='picnic_table')))){
+      out.push({type:'node', tags:el.tags, lat:el.lat, lon:el.lon});
+    }
+    if(el.type==='way' && el.tags && el.nodes && el.nodes.length>1){
+      const t=el.tags;
+      if(t.building || t.natural==='tree_row' || t.natural==='wood' || t.landuse==='forest' ||
+         (withVenues && VENUE_RE.test(t.amenity||''))){
+        const geometry = el.nodes.map(id=>nodes.get(id)).filter(Boolean).map(n=>({lat:n.lat, lon:n.lon}));
+        if(geometry.length>1) out.push({type:'way', tags:t, geometry});
+      }
+    }
+  }
+  return out;
+}
+async function fetchArea(center, radius, withVenues, onStatus){
+  if(onStatus) onStatus('Fetching map dataâ€¦');
+  const c = `${center.lat.toFixed(6)},${center.lng.toFixed(6)}`;
+  let q = `[out:json][timeout:23];(way["building"](around:${radius},${c});node["natural"="tree"](around:${radius},${c});way["natural"="tree_row"](around:${radius},${c});way["natural"="wood"](around:${radius},${c});way["landuse"="forest"](around:${radius},${c});`;
+  if(withVenues) q += `nw["amenity"~"^(cafe|bar|pub|biergarten|restaurant|bench)$"](around:${radius},${c});node["leisure"="picnic_table"](around:${radius},${c});`;
+  if(!withVenues) q += `way["landuse"~"^(railway|military|industrial)$"](around:${radius},${c});way["man_made"~"^(wastewater_plant|works)$"](around:${radius},${c});`;
+  q += `);out geom;`;
+  for(let i=0;i<OVERPASS.length;i++){
+    try{
+      if(onStatus && i) onStatus(`Map server ${i+1} of ${OVERPASS.length}â€¦`);
+      const j=await fetchJson(OVERPASS[i]+'?data='+encodeURIComponent(q),25000);
+      return j.elements||[];
+    }catch{}
+  }
+  if(onStatus) onStatus('Trying OpenStreetMap fallbackâ€¦');
+  try{ return await fetchFromOsmApi(center,radius,withVenues); }
+  catch{ throw new Error('all map data sources failed'); }
+}
+async function fetchObstructions(pin, onStatus){
+  return fetchArea(pin, 320, false, onStatus);
+}
+// Best-effort only: used to keep the zone scan from picking a "sunny point" that's actually
+// in the middle of a river. Fails silently (returns no water) rather than blocking the scan.
+async function fetchWater(center, radius){
+  const c = `${center.lat.toFixed(6)},${center.lng.toFixed(6)}`;
+  const q = `[out:json][timeout:20];(way["natural"="water"](around:${radius},${c});way["waterway"="riverbank"](around:${radius},${c});way["waterway"~"^(river|stream|canal)$"](around:${radius},${c});way["natural"="bay"](around:${radius},${c});way["natural"="coastline"](around:${radius},${c}););out geom;`;
+  for(const u of OVERPASS){ try{ const j=await fetchJson(u+'?data='+encodeURIComponent(q),18000); return j.elements||[]; }catch{} }
+  return []; // all sources failed â€” degrade gracefully rather than blocking the scan
+}
+function buildWaterPolys(elements, frame){
+  // Open sea/harbour is usually NOT tagged as an explicit water polygon at all â€” OSM marks
+  // only the coastline itself, with the convention that the sea sits to the RIGHT of the
+  // way's stored direction. Rivers/lakes/bays, on the other hand, ARE explicit polygons.
+  const polys=[], coastSegs=[];
+  for(const el of elements){
+    if(!el.geometry || el.geometry.length<2) continue;
+    const tags = el.tags||{};
+    const raw = el.geometry.map(g=>frame.toXY({lat:g.lat, lng:g.lon}));
+    if(tags.natural==='coastline'){
+      for(let i=0;i<raw.length-1;i++) coastSegs.push({a:raw[i], b:raw[i+1]});
+    }else if(tags.waterway && tags.waterway!=='riverbank'){
+      // mapped as a line (common for narrower rivers/streams) â€” buffer into a strip
+      const halfW = tags.waterway==='stream' ? 4 : 14;
+      for(let i=0;i<raw.length-1;i++){
+        const a=raw[i], b=raw[i+1];
+        const len=Math.hypot(b.x-a.x, b.y-a.y); if(len<0.5) continue;
+        const nx=-(b.y-a.y)/len*halfW, ny=(b.x-a.x)/len*halfW;
+        polys.push([{x:a.x+nx,y:a.y+ny},{x:b.x+nx,y:b.y+ny},{x:b.x-nx,y:b.y-ny},{x:a.x-nx,y:a.y-ny}]);
+      }
+    }else if(raw.length>=4){
+      polys.push(raw); // natural=water, waterway=riverbank, or natural=bay polygon
+    }
+  }
+  return {polys, coastSegs};
+}
+// A point counts as sea if it falls on the seaward side of any nearby coastline segment
+// (checked only near that segment's own span, so a distant unrelated stretch of coast
+// doesn't wrongly claim points on the opposite side of the peninsula).
+function isSeaSide(pt, coastSegs){
+  for(const {a,b} of coastSegs){
+    const len = Math.hypot(b.x-a.x, b.y-a.y); if(len<1) continue;
+    const t = ((pt.x-a.x)*(b.x-a.x)+(pt.y-a.y)*(b.y-a.y))/(len*len);
+    if(t < -0.25 || t > 1.25) continue;
+    const cross = (b.x-a.x)*(pt.y-a.y) - (b.y-a.y)*(pt.x-a.x);
+    if(cross < 0) return true; // right of the way's direction = sea, by OSM coastline convention
+  }
+  return false;
+}
+function parseHeight(tags, fallback){
+  if(tags && tags.height){
+    const raw=String(tags.height).trim().toLowerCase().replace(',', '.');
+    const v=parseFloat(raw);
+    if(v>0){
+      const feet=/(?:\bft\b|feet|foot|')/.test(raw);
+      const inchMatch=raw.match(/(?:\d+\s*')?\s*(\d+(?:\.\d+)?)\s*(?:in|")/);
+      const metres=feet ? v*0.3048+(inchMatch?parseFloat(inchMatch[1])*0.0254:0) : v;
+      if(metres>0 && metres<1000) return {h:metres, hasData:true};
+    }
+  }
+  if(tags && tags['building:levels']){ const l=parseFloat(tags['building:levels']); if(l>0) return {h:l*3.2+1, hasData:true}; }
+  return {h:fallback, hasData:false};
+}
+function finishPoly(pts, frame){
+  let cx=0, cy=0;
+  for(const p of pts){ cx+=p.x; cy+=p.y; }
+  cx/=pts.length; cy/=pts.length;
+  return {cx, cy, dist: Math.hypot(cx, cy),
+          ptsLL: pts.map(p=>{const ll=frame.toLL(p); return [ll.lat,ll.lng];})};
+}
+function prepareObstructions(elements, frame, assumed){
+  const buildings=[], trees=[];
+  for(const el of elements){
+    const tags = el.tags || {};
+    // single trees â†’ small square canopy
+    if(el.lat!=null && tags.natural==='tree'){
+      const c = frame.toXY({lat:el.lat, lng:el.lon});
+      const r = 2.5;
+      const pts=[{x:c.x-r,y:c.y-r},{x:c.x+r,y:c.y-r},{x:c.x+r,y:c.y+r},{x:c.x-r,y:c.y+r}];
+      const {h} = parseHeight(tags, 8);
+      trees.push({pts, h, hasData:false, kind:'tree', ...finishPoly(pts, frame)});
+      continue;
+    }
+    if(!el.geometry || el.geometry.length<2) continue;
+    const raw = el.geometry.map(g=>frame.toXY({lat:g.lat, lng:g.lon}));
+    // tree rows â†’ thin quads per segment
+    if(tags.natural==='tree_row'){
+      for(let i=0;i<raw.length-1;i++){
+        const a=raw[i], b=raw[i+1];
+        const len=Math.hypot(b.x-a.x, b.y-a.y); if(len<0.5) continue;
+        const nx=-(b.y-a.y)/len*1.5, ny=(b.x-a.x)/len*1.5;
+        const pts=[{x:a.x+nx,y:a.y+ny},{x:b.x+nx,y:b.y+ny},{x:b.x-nx,y:b.y-ny},{x:a.x-nx,y:a.y-ny}];
+        trees.push({pts, h:8, hasData:false, kind:'tree', ...finishPoly(pts, frame)});
+      }
+      continue;
+    }
+    if(raw.length<4) continue;
+    // woods & forests â†’ canopy walls, buildings â†’ buildings
+    if(tags.natural==='wood' || tags.landuse==='forest'){
+      trees.push({pts:raw, h:10, hasData:false, kind:'tree', ...finishPoly(raw, frame)});
+    }else if(tags.building){
+      const {h,hasData} = parseHeight(tags, assumed);
+      buildings.push({pts:raw, h, hasData, kind:'building', ...finishPoly(raw, frame)});
+    }
+  }
+  return {buildings, trees};
+}
+
+/* ---------------- cloud forecast (Open-Meteo) ---------------- */
+async function fetchCloud(pin){
+  try{
+    const j = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${pin.lat.toFixed(4)}&longitude=${pin.lng.toFixed(4)}&hourly=cloud_cover&forecast_days=16&timezone=auto`, 12000);
+    const out={};
+    j.hourly.time.forEach((t,i)=>{
+      const day=t.slice(0,10);
+      (out[day] = out[day] || [])[+t.slice(11,13)] = j.hourly.cloud_cover[i];
+    });
+    return {cloud:out, timezone:j.timezone||'UTC'};
+  }catch{ return {cloud:{}, timezone:null}; }
+}
+
+/* ---------------- day computation ---------------- */
+function midnightOf(d){ const m=new Date(d); m.setHours(0,0,0,0); return m; }
+const STEP = 4;
+
+function activeSet(){
+  const all = S.treesOn ? S.buildings.concat(S.trees) : S.buildings;
+  const act = all.filter(b=>!pointInPoly({x:0,y:0}, b.pts));
+  S.insideBuilding = act.length !== all.length;
+  return act;
+}
+function computeDayFor(date, act, pin){
+  const key = dateKey(date);
+  const n = 1440/STEP;
+  const samples=new Array(n), azAt=new Array(n), altAt=new Array(n);
+  let sunrise=null, sunset=null, prevUp=false;
+  for(let i=0;i<n;i++){
+    const t = civilDateTimeToUtc(key, i*STEP);
+    const {alt, az} = sunPosition(t, pin.lat, pin.lng);
+    azAt[i]=az; altAt[i]=alt;
+    const up = alt > 0.4;
+    if(up && !prevUp && sunrise===null) sunrise = i*STEP;
+    if(!up && prevUp) sunset = i*STEP;
+    prevUp = up;
+    if(!up){ samples[i]=0; continue; }
+    const dx=Math.sin(az*RAD), dy=Math.cos(az*RAD);
+    let blocked=false;
+    for(const b of act){
+      const hits = rayHits(dx, dy, b.pts, 400);
+      for(const d of hits){
+        if(Math.atan2(b.h, d)*DEG >= alt){ blocked=true; break; }
+      }
+      if(blocked) break;
+    }
+    samples[i] = blocked ? 1 : 2;
+  }
+  const segments=[]; let s=null;
+  for(let i=0;i<n;i++){
+    if(samples[i]===2 && s===null) s=i;
+    if(samples[i]!==2 && s!==null){ segments.push({from:s*STEP, to:i*STEP, azFrom:azAt[s], azTo:azAt[i-1]}); s=null; }
+  }
+  if(s!==null) segments.push({from:s*STEP, to:1440, azFrom:azAt[s], azTo:azAt[n-1]});
+  const total = segments.reduce((a,x)=>a+(x.to-x.from),0);
+  return {samples, azAt, altAt, segments, sunrise, sunset, total};
+}
+
+/* ---------------- rendering: ribbons ---------------- */
+function cloudHours(){ return S.forecastOn ? S.cloud[dateKey(S.date)] : null; }
+function ribbonGradient(day){
+  const hours = cloudHours();
+  const colorAt = i => {
+    if(day.samples[i]===0) return '#2B2620';
+    if(day.samples[i]===1) return '#9AA1AB';
+    // sunlit: golden vs full sun, muted if forecast says overcast
+    const cc = hours ? hours[Math.floor(i*STEP/60)] : null;
+    if(cc!=null && cc>=65) return '#C2B295';
+    return day.altAt[i] < GOLDEN_ALT ? '#DF7E0B' : '#F0A311';
+  };
+  const stops=[]; let runStart=0;
+  for(let i=1;i<=day.samples.length;i++){
+    if(i===day.samples.length || colorAt(i)!==colorAt(runStart)){
+      const a=(runStart*STEP/1440*100).toFixed(2), b=(i*STEP/1440*100).toFixed(2);
+      stops.push(`${colorAt(runStart)} ${a}% ${b}%`);
+      runStart=i;
+    }
+  }
+  return `linear-gradient(90deg, ${stops.join(',')})`;
+}
+function renderRibbon(){ $('ribbonFill').style.background = ribbonGradient(S.day); }
+function meanCloud(from, to){
+  const hours = S.cloud[dateKey(S.date)];
+  if(!hours) return null;
+  let sum=0, n=0;
+  for(let h=Math.floor(from/60); h<=Math.min(23, Math.floor((to-1)/60)); h++){
+    if(hours[h]!=null){ sum+=hours[h]; n++; }
+  }
+  return n ? sum/n : null;
+}
+
+/* ---------------- rendering: panel ---------------- */
+function renderWindows(){
+  const el = $('windowsList'); el.innerHTML='';
+  const D = S.day;
+  const addRow=(dotCls, main, side)=>{
+    const r=document.createElement('div'); r.className='win-row';
+    r.innerHTML=`<span class="win-dot ${dotCls}"></span><span class="win-main">${main}</span><span class="win-side">${side}</span>`;
+    el.appendChild(r);
+  };
+  if(D.sunrise!==null) addRow('rise', `Sunrise <b>${fmtTime(D.sunrise)}</b> Â· Sunset <b>${fmtTime(D.sunset??1439)}</b>`, `day ${fmtDur((D.sunset??1440)-D.sunrise)}`);
+  if(D.segments.length===0){
+    addRow('', `<b>No direct sun</b> reaches this exact point`, D.sunrise===null?'polar night?':'shaded all day');
+  }else{
+    for(const seg of D.segments){
+      const dir = compass(seg.azFrom)===compass(seg.azTo) ? `from ${compass(seg.azFrom)}` : `${compass(seg.azFrom)} â†’ ${compass(seg.azTo)}`;
+      const mc = S.forecastOn ? meanCloud(seg.from, seg.to) : null;
+      const cl = mc==null ? '' : mc>=70 ? ' Â· â˜' : mc>=40 ? ' Â· â›…' : ' Â· â˜€';
+      addRow('sun', `Sun <b>${fmtTime(seg.from)} â€“ ${fmtTime(seg.to)}</b>`, `${fmtDur(seg.to-seg.from)} Â· ${dir}${cl}`);
+    }
+  }
+  if(S.forecastOn && !S.cloud[dateKey(S.date)]){
+    const n=document.createElement('p'); n.className='note';
+    n.textContent='Weather forecast unavailable for this date. Showing potential direct sunlight based on sun position and surrounding obstructions.';
+    el.appendChild(n);
+  }
+  const chip=$('totalChip'); chip.hidden=false;
+  chip.textContent = D.total>0 ? `â˜€ ${fmtDur(D.total)}` : 'No direct sun';
+  chip.classList.toggle('none', D.total===0);
+  if(S.insideBuilding) toast('Your pin is inside a building or wood â€” that shape is ignored; nudge the pin for accuracy');
+}
+function renderTimeState(){
+  $('timeLabel').textContent = fmtTime(S.minutes);
+  const i=Math.min(S.day.samples.length-1, Math.floor(S.minutes/STEP));
+  const st=S.day.samples[i], golden = st===2 && S.day.altAt[i] < GOLDEN_ALT;
+  const hours = cloudHours();
+  const cc = (st===2 && hours) ? hours[Math.floor(S.minutes/60)] : null;
+  const lab=$('stateLabel');
+  let txt = st===2 ? 'Direct sun possible' : st===1 ? 'Building shade' : 'Night';
+  if(st===2 && cc!=null && cc>=65) txt += ' Â· cloudy forecast';
+  lab.textContent = txt;
+  lab.className = 'state ' + (golden ? 'golden' : st===2 ? 'sun' : st===1 ? 'shade' : 'night');
+  $('ribbonCursor').style.left = (S.minutes/1440*100)+'%';
+}
+function renderCompare(){
+  const block=$('compareBlock');
+  if(!S.compare || !S.day){ block.hidden=true; return; }
+  block.hidden=false;
+  const rows=$('compareRows'); rows.innerHTML='';
+  const mk=(label, day)=>{
+    const r=document.createElement('div'); r.className='mini-row';
+    r.innerHTML=`<div class="mini-meta"><span class="nm">${esc(label)}</span><span class="tt">â˜€ ${day.total>0?fmtDur(day.total):'none'}</span></div>
+      <div class="mini-ribbon"><div class="mini-fill" style="background:${ribbonGradient(day)}"></div></div>`;
+    rows.appendChild(r);
+  };
+  mk('A Â· '+S.compare.label, S.compare.day);
+  mk('B Â· '+($('placeName').textContent), S.day);
+}
+
+/* ---------------- year strip ---------------- */
+const MONTHS='JFMAMJJASOND';
+function initYearBars(){
+  const wrap=$('yearBars'); wrap.innerHTML='';
+  for(let m=0;m<12;m++){
+    const b=document.createElement('div');
+    b.className='ybar pending'+(m===S.date.getMonth()?' cur':'');
+    b.innerHTML=`<span class="v"></span><div class="col" style="height:2px"></div><span class="m">${MONTHS[m]}</span>`;
+    wrap.appendChild(b);
+  }
+  $('yearNote').textContent='calculatingâ€¦';
+}
+async function computeYear(){
+  const token = ++S.yearToken;
+  initYearBars();
+  const bars=$('yearBars').children;
+  const year=S.date.getFullYear();
+  for(let m=0;m<12;m++){
+    await new Promise(r=>setTimeout(r, 30)); // keep UI responsive
+    if(token!==S.yearToken || !S.pin) return;
+    const day = computeDayFor(new Date(year, m, 21, 12), S.act, S.pin);
+    const hrs = day.total/60;
+    const bar = bars[m];
+    bar.classList.remove('pending');
+    bar.querySelector('.col').style.height = Math.max(3, hrs/16*58)+'px';
+    bar.querySelector('.v').textContent = hrs>=0.95 ? Math.round(hrs) : hrs>0 ? 'Â½' : '0';
+  }
+  if(token===S.yearToken) $('yearNote').textContent='hours of direct sun Â· amber bar = this month';
+}
+
+/* ---------------- rendering: map layers ---------------- */
+function drawList(){ return (S.treesOn ? S.buildings.concat(S.trees) : S.buildings).filter(b=>b.dist<=240); }
+function renderFootprints(){
+  footprintLayer.clearLayers();
+  for(const b of drawList()){
+    L.polygon(b.ptsLL, {color: b.kind==='tree' ? '#4C7A4C' : '#57606C', weight:1, opacity:.35, fill:false, interactive:false}).addTo(footprintLayer);
+  }
+}
+function renderShadows(){
+  shadowLayer.clearLayers(); coneLayer.clearLayers();
+  if(!S.pin) return;
+  const frame = localFrame(S.pin);
+  const t = civilDateTimeToUtc(dateKey(S.date), S.minutes);
+  const {alt, az} = sunPosition(t, S.pin.lat, S.pin.lng);
+  if(alt <= 0.4) return;
+
+  const ax = Math.sin((az+180)*RAD), ay = Math.cos((az+180)*RAD);
+  const tanAlt = Math.tan(Math.max(alt, 1.0)*RAD);
+  for(const b of drawList()){
+    const len = Math.min(150, b.h / tanAlt);
+    const proj = b.pts.map(p=>({x:p.x+ax*len, y:p.y+ay*len}));
+    const hull = convexHull(b.pts.concat(proj));
+    if(hull.length<3) continue;
+    L.polygon(hull.map(p=>{const ll=frame.toLL(p); return [ll.lat,ll.lng];}),
+      {pane:'sunShadowPane', stroke:false, fillColor:'#57606C', fillOpacity:1, interactive:false}).addTo(shadowLayer);
+  }
+  const coneR=52, spread=11;
+  const conePts=[{x:0,y:0}];
+  for(let a=az-spread; a<=az+spread; a+=2.5) conePts.push({x:Math.sin(a*RAD)*coneR, y:Math.cos(a*RAD)*coneR});
+  L.polygon(conePts.map(p=>{const ll=frame.toLL(p); return [ll.lat,ll.lng];}),
+    {stroke:false, fillColor:'#F0A311', fillOpacity:.5, interactive:false}).addTo(coneLayer);
+  const tip = frame.toLL({x:Math.sin(az*RAD)*coneR*1.35, y:Math.cos(az*RAD)*coneR*1.35});
+  L.polyline([[S.pin.lat,S.pin.lng],[tip.lat,tip.lng]], {color:'#C97E06', weight:2.5, dashArray:'2 6', interactive:false}).addTo(coneLayer);
+  L.circleMarker([tip.lat,tip.lng],{radius:7, color:'#201B14', weight:1.5, fillColor:'#F0A311', fillOpacity:1, interactive:false}).addTo(coneLayer);
+}
+function renderSunArc(){
+  arcLayer.clearLayers();
+  if(!S.pin || S.day.sunrise===null) return;
+  const frame=localFrame(S.pin), pts=[];
+  for(let m=S.day.sunrise; m<=(S.day.sunset??1439); m+=20){
+    const t=civilDateTimeToUtc(dateKey(S.date),m);
+    const {az}=sunPosition(t,S.pin.lat,S.pin.lng);
+    const ll=frame.toLL({x:Math.sin(az*RAD)*70, y:Math.cos(az*RAD)*70});
+    pts.push([ll.lat,ll.lng]);
+  }
+  L.polyline(pts,{color:'#C97E06', weight:1.5, dashArray:'1 7', opacity:.9, interactive:false}).addTo(arcLayer);
+}
+
+/* ---------------- orchestration ---------------- */
+function rerenderDay(){
+  renderRibbon(); renderWindows(); renderTimeState();
+  renderShadows(); renderSunArc(); renderCompare();
+}
+function recompute(){
+  S.act = activeSet();
+  S.day = computeDayFor(S.date, S.act, S.pin);
+  rerenderDay();
+  computeYear();
+}
+function updateHash(){
+  if(!S.pin) return;
+  const h = `#p=${S.pin.lat.toFixed(5)},${S.pin.lng.toFixed(5)}&d=${dateKey(S.date)}`;
+  try{ history.replaceState(null,'',h); }catch{}
+}
+
+async function setPin(lat, lng, label){
+  if(scanMode) cancelScanMode(); // in case search/locate/finder fires mid-draw
+  // compare handoff: keep the previous pin as A
+  if(S.pendingCompare && S.pin && S.day){
+    S.compare = {label: $('placeName').textContent, pin: S.pin, day: S.day};
+    S.pendingCompare = false;
+    $('chipCompare').setAttribute('aria-pressed','false');
+    if(compareMarker) compareMarker.remove();
+    compareMarker = L.marker([S.pin.lat,S.pin.lng], {icon:pinIconB, keyboard:false}).addTo(map);
+  }
+  S.pin={lat,lng};
+  if(pinMarker) pinMarker.remove();
+  pinMarker=L.marker([lat,lng],{icon:pinIcon, keyboard:false}).addTo(map);
+  // bring the spot front and center, zoomed in enough to read the street clearly
+  map.setView([lat,lng], Math.max(map.getZoom(), 18), {animate:true});
+  $('emptyMsg').hidden=true; $('results').hidden=true; $('errorRow').hidden=true;
+  $('loadingRow').hidden=false; $('totalChip').hidden=true;
+  $('placeName').textContent = label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  goToSheetState('peek');
+  nudgeAbovePeek();
+
+  const token=++S.fetchToken;
+  const now=new Date();
+  if(!label){ reverseGeocode(lat,lng).then(n=>{ if(n && token===S.fetchToken){ $('placeName').textContent=n; if(S.day) renderCompare(); } }); }
+  const weatherPromise=fetchCloud(S.pin);
+
+  try{
+    const [els,weather] = await Promise.all([
+      fetchObstructions(S.pin,msg=>{ if(token===S.fetchToken) $('loadingText').textContent=msg; }),
+      weatherPromise
+    ]);
+    if(token!==S.fetchToken) return;
+    if(weather.timezone){ S.timezone=weather.timezone; S.timezoneReady=true; }
+    S.cloud=weather.cloud;
+    const todayKey=zonedDateKey(now);
+    if(!S.preserveDate){
+      S.date=dateFromKey(todayKey); dateInput.value=todayKey;
+      S.minutes=zonedMinutes(now); $('ribbonInput').value=S.minutes;
+    }
+    const frame=localFrame(S.pin);
+    const {buildings, trees} = prepareObstructions(els, frame, +$('assumedH').value);
+    S.buildings=buildings; S.trees=trees;
+    $('loadingText').textContent='Tracing the sunâ€¦';
+    await new Promise(r=>setTimeout(r,20));
+    if(token!==S.fetchToken) return;
+    renderFootprints();
+    recompute();
+    updateHash();
+    $('loadingRow').hidden=true; $('results').hidden=false;
+    goToSheetState('peek');
+    nudgeAbovePeek();
+  }catch(e){
+    if(token!==S.fetchToken) return;
+    $('loadingRow').hidden=true;
+    const er=$('errorRow'); er.hidden=false;
+    er.innerHTML=`Couldn't reach the map database (${e.message}). If you're viewing a published/preview version, the sandbox may block map data â€” the downloaded file in a browser works fully. <button id="retryBtn">Retry</button> <button id="skyBtn">Open-sky times</button>`;
+    goToSheetState('peek');
+    nudgeAbovePeek();
+    $('retryBtn').onclick=()=>setPin(lat,lng,label);
+    $('skyBtn').onclick=()=>{
+      er.hidden=true; S.buildings=[]; S.trees=[]; footprintLayer.clearLayers();
+      recompute(); $('loadingRow').hidden=true; $('results').hidden=false;
+      goToSheetState('peek');
+    };
+  }
+}
+
+/* ---------------- geocoding ---------------- */
+const geocodeCache=new Map();
+let lastGeocodeAt=0, geocodeQueue=Promise.resolve();
+function throttledGeocode(key, url){
+  if(geocodeCache.has(key)) return Promise.resolve(geocodeCache.get(key));
+  const job=geocodeQueue.then(async()=>{
+    const wait=Math.max(0,1100-(Date.now()-lastGeocodeAt));
+    if(wait) await new Promise(r=>setTimeout(r,wait));
+    lastGeocodeAt=Date.now();
+    const value=await fetchJson(url,10000);
+    if(geocodeCache.size>=40) geocodeCache.delete(geocodeCache.keys().next().value);
+    geocodeCache.set(key,value); return value;
+  });
+  geocodeQueue=job.catch(()=>{}); return job;
+}
+async function reverseGeocode(lat,lng){
+  try{
+    const key=`r:${lat.toFixed(5)},${lng.toFixed(5)}`;
+    const j=await throttledGeocode(key,`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=17`);
+    const a=j.address||{};
+    return [a.amenity||a.tourism||a.leisure||a.building, a.road, a.neighbourhood||a.suburb||a.village||a.town||a.city]
+      .filter(Boolean).slice(0,2).join(', ') || j.name || null;
+  }catch{ return null; }
+}
+$('searchInput').addEventListener('input', ()=>$('searchResults').classList.remove('open'));
+$('searchForm').addEventListener('submit', e=>{ e.preventDefault(); doSearch($('searchInput').value.trim()); });
+async function doSearch(q){
+  if(!q) return;
+  try{
+    const normalized=q.toLocaleLowerCase().replace(/\s+/g,' ').trim();
+    const list=await throttledGeocode(`s:${normalized}`,`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`);
+    const box=$('searchResults'); box.innerHTML='';
+    if(!list.length){ box.innerHTML='<button disabled>No results â€” try adding the city name</button>'; box.classList.add('open'); return; }
+    for(const item of list){
+      const b=document.createElement('button');
+      const parts=item.display_name.split(', ');
+      b.innerHTML=`<b>${esc(parts[0])}</b><span class="muted">${esc(parts.slice(1,4).join(', '))}</span>`;
+      b.onclick=()=>{
+        box.classList.remove('open');
+        $('searchInput').value=parts[0];
+        setPin(+item.lat,+item.lon, parts[0]);
+      };
+      box.appendChild(b);
+    }
+    box.classList.add('open');
+  }catch{ /* silent */ }
+}
+document.addEventListener('click', e=>{ if(!e.target.closest('.search-wrap')) $('searchResults').classList.remove('open'); });
+
+/* ---------------- events ---------------- */
+map.on('click', e=>{
+  if(scanMode){ handleScanClick(e.latlng); return; }
+  setPin(e.latlng.lat, e.latlng.lng);
+});
+
+function setMinutes(m){
+  S.minutes = Math.min(1439, Math.max(0, Math.round(m)));
+  $('ribbonInput').value = S.minutes;
+  if(S.day){ renderTimeState(); renderShadows(); }
+}
+$('ribbonInput').addEventListener('input', e=> setMinutes(+e.target.value));
+$('hourDown').addEventListener('click', ()=> setMinutes(S.minutes - 60));
+$('hourUp').addEventListener('click', ()=> setMinutes(S.minutes + 60));
+$('btnNow').addEventListener('click', ()=>{
+  const n=new Date();
+  S.preserveDate=false;
+  setDate(dateFromKey(zonedDateKey(n)), 'chipToday');
+  setMinutes(zonedMinutes(n));
+});
+
+const dateInput=$('dateInput');
+function setDate(d, pressedId){
+  S.date=d;
+  dateInput.value=dateKey(d);
+  $('chipToday').setAttribute('aria-pressed', pressedId==='chipToday' ? 'true':'false');
+  if(S.pin && S.day){
+    S.day = computeDayFor(S.date, S.act, S.pin);
+    rerenderDay();
+    updateHash();
+  }
+}
+dateInput.addEventListener('change', ()=>{ if(dateInput.value){ S.preserveDate=true; setDate(dateFromKey(dateInput.value), null); } });
+$('chipToday').onclick=()=>{ S.preserveDate=false; setDate(dateFromKey(zonedDateKey(new Date())),'chipToday'); };
+setDate(dateFromKey(zonedDateKey(new Date())),'chipToday');
+$('ribbonInput').value=S.minutes;
+
+$('assumedH').addEventListener('input', e=> $('assumedHOut').textContent=e.target.value+' m');
+$('assumedH').addEventListener('change', e=>{
+  const v=+e.target.value;
+  for(const b of S.buildings) if(!b.hasData) b.h=v;
+  if(S.pin) recompute();
+});
+
+/* trees toggle */
+$('chipTrees').addEventListener('click', ()=>{
+  S.treesOn = !S.treesOn;
+  const c=$('chipTrees');
+  c.setAttribute('aria-pressed', String(S.treesOn));
+  c.textContent = S.treesOn ? 'ðŸŒ³ Trees on' : 'ðŸŒ³ Trees off';
+  if(S.pin && S.day){ renderFootprints(); recompute(); }
+});
+
+/* compare */
+$('chipCompare').addEventListener('click', ()=>{
+  if(!S.pin || !S.day){ toast('Drop a pin first, then compare'); return; }
+  S.pendingCompare = !S.pendingCompare;
+  $('chipCompare').setAttribute('aria-pressed', String(S.pendingCompare));
+  if(S.pendingCompare) toast('Now tap or search a second spot to compare');
+});
+$('compareClear').addEventListener('click', ()=>{
+  S.compare=null; S.pendingCompare=false;
+  $('chipCompare').setAttribute('aria-pressed','false');
+  if(compareMarker){ compareMarker.remove(); compareMarker=null; }
+  renderCompare();
+});
+
+/* find me */
+$('locateBtn').addEventListener('click', ()=>{
+  if(!navigator.geolocation){ toast('No location support in this browser'); return; }
+  toast('Finding youâ€¦', 2000);
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      const {latitude:la, longitude:lo}=pos.coords;
+      setPin(la,lo);
+    },
+    ()=> toast('Location blocked â€” this works once the app is hosted on a website'),
+    {enableHighAccuracy:true, timeout:9000}
+  );
+});
+
+
+/* forecast toggle */
+$('chipCloud').addEventListener('click', ()=>{
+  S.forecastOn = !S.forecastOn;
+  const c=$('chipCloud');
+  c.setAttribute('aria-pressed', String(S.forecastOn));
+  c.textContent = S.forecastOn ? '\u2601 Forecast on' : '\u2601 Forecast off';
+  if(S.day){ renderRibbon(); renderWindows(); renderTimeState(); renderCompare(); }
+});
+
+/* ---------------- sun finder ---------------- */
+const finderLayer = L.layerGroup().addTo(map);
+let finderToken = 0, finderMode = 'sun';
+const CATS = {cafe:['cafe'], pub:['pub','bar','biergarten'], restaurant:['restaurant'], bench:['bench','picnic_table']};
+const parseHM = v => { if(!v) return null; const [a,b]=v.split(':').map(Number); return isNaN(a)?null:a*60+(b||0); };
+
+document.querySelectorAll('#findMode .seg-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    finderMode = btn.dataset.mode;
+    document.querySelectorAll('#findMode .seg-btn').forEach(b=>b.classList.toggle('active', b===btn));
+  });
+});
+
+$('chipFinder').addEventListener('click', ()=>{
+  const block=$('finderBlock');
+  block.hidden = !block.hidden;
+  $('chipFinder').setAttribute('aria-pressed', String(!block.hidden));
+  if(!block.hidden && !$('findFrom').value){
+    const n=new Date();
+    let f=Math.min(Math.floor(zonedMinutes(n)/60), 19)*60;
+    $('findFrom').value=fmtTime(f); $('findTo').value=fmtTime(Math.min(f+180, 1439));
+  }
+});
+$('findGo').addEventListener('click', runFinder);
+
+function extractVenues(elements, frame, cat){
+  const want=new Set(CATS[cat]);
+  const out=[], seen=new Set();
+  for(const el of elements){
+    const tg=el.tags||{}; const a=VENUE_RE.test(tg.amenity||'')?tg.amenity:(tg.leisure==='picnic_table'?'picnic_table':null);
+    if(!a || !want.has(a)) continue;
+    let lat,lng, samplePoints=[];
+    if(el.lat!=null){ lat=el.lat; lng=el.lon; samplePoints=[{lat,lng}]; }
+    else if(el.center){ lat=el.center.lat; lng=el.center.lon; }
+    else if(el.geometry && el.geometry.length){
+      lat=el.geometry.reduce((s,g)=>s+g.lat,0)/el.geometry.length;
+      lng=el.geometry.reduce((s,g)=>s+g.lon,0)/el.geometry.length;
+      const poly=el.geometry.map(g=>frame.toXY({lat:g.lat,lng:g.lon}));
+      for(let i=0;i<poly.length-1;i++){
+        const p=poly[i],q=poly[i+1],len=Math.hypot(q.x-p.x,q.y-p.y); if(len<2) continue;
+        const mid={x:(p.x+q.x)/2,y:(p.y+q.y)/2}, nx=-(q.y-p.y)/len*2.5, ny=(q.x-p.x)/len*2.5;
+        for(const sign of [1,-1]){ const pt={x:mid.x+nx*sign,y:mid.y+ny*sign}; if(!pointInPoly(pt,poly)) samplePoints.push(frame.toLL(pt)); }
+      }
+    }else continue;
+    const name = tg.name || (a==='bench'?'Bench':a==='picnic_table'?'Picnic table':null);
+    if(!name) continue;
+    const key=name+lat.toFixed(5); if(seen.has(key)) continue; seen.add(key);
+    const p=frame.toXY({lat,lng});
+    if(!samplePoints.length) samplePoints=[{lat,lng}];
+    const precise=el.lat!=null && (a==='bench' || a==='picnic_table');
+    out.push({name, lat, lng, x:p.x, y:p.y, samples:samplePoints.slice(0,12), precise, outdoor:tg.outdoor_seating==='yes', d:Math.hypot(p.x,p.y)});
+  }
+  out.sort((q,w)=>(Number(w.outdoor)-Number(q.outdoor)) || q.d-w.d);
+  return out.slice(0,40);
+}
+
+async function runFinder(){
+  const cat=$('findCat').value;
+  const fm=parseHM($('findFrom').value), tm=parseHM($('findTo').value);
+  if(fm==null || tm==null || tm<=fm){ toast('Set a valid time window (from before until)'); return; }
+  const c=map.getCenter();
+  const token=++finderToken;
+  $('finderNote').textContent='Searching venues & tracing the sun\u2026';
+  $('finderResults').innerHTML='';
+  finderLayer.clearLayers();
+  try{
+    const els = await fetchArea({lat:c.lat, lng:c.lng}, 450, true);
+    if(token!==finderToken) return;
+    const frame = localFrame({lat:c.lat, lng:c.lng});
+    const {buildings, trees} = prepareObstructions(els, frame, +$('assumedH').value);
+    const obst = S.treesOn ? buildings.concat(trees) : buildings;
+    const venues = extractVenues(els, frame, cat);
+    if(!venues.length){
+      $('finderNote').textContent='Nothing matching in this area \u2014 pan or zoom the map, then Go again.';
+      return;
+    }
+    // precompute sun samples across the window (10-min steps)
+    const samples=[];
+    for(let m=fm; m<tm; m+=10){
+      const {alt, az}=sunPosition(civilDateTimeToUtc(dateKey(S.date),m), c.lat, c.lng);
+      samples.push({alt, dx:Math.sin(az*RAD), dy:Math.cos(az*RAD)});
+    }
+    const anySunUp = samples.some(s=>s.alt>0.4);
+    for(const v of venues){
+      let best={score:-1,lat:v.lat,lng:v.lng,x:v.x,y:v.y};
+      for(const ll of v.samples){
+        const vp=frame.toXY(ll), near=obst.filter(o=>Math.hypot(o.cx-vp.x,o.cy-vp.y)<300 && !pointInPoly(vp,o.pts));
+        let sun=0;
+        for(const s of samples){
+          if(s.alt<=0.4) continue;
+          let blocked=false;
+          for(const o of near){
+            const hits=rayHitsO(vp.x,vp.y,s.dx,s.dy,o.pts,400);
+            for(const d of hits){ if(Math.atan2(o.h,d)*DEG>=s.alt){ blocked=true; break; } }
+            if(blocked) break;
+          }
+          if(!blocked) sun++;
+        }
+        const score=samples.length?sun/samples.length:0;
+        if(score>best.score) best={score,lat:ll.lat,lng:ll.lng,x:vp.x,y:vp.y};
+      }
+      Object.assign(v,best); v.d=Math.hypot(v.x,v.y);
+    }
+    const shade = finderMode==='shade';
+    venues.sort((a,b)=> Number(b.outdoor)-Number(a.outdoor) || (shade ? (a.score-b.score || a.d-b.d) : (b.score-a.score || a.d-b.d)));
+    if(token!==finderToken) return;
+    renderFinder(venues.slice(0,12), fm, tm, anySunUp, finderMode);
+  }catch(e){
+    if(token===finderToken) $('finderNote').textContent='Couldn\u2019t search right now \u2014 try again in a moment.';
+  }
+}
+
+function renderFinder(venues, fm, tm, anySunUp, mode){
+  const shade = mode==='shade';
+  const modeIcon = shade ? '\ud83c\udf25' : '\u2600';
+  let note = `${shade?'Most building shade near':'Most direct-sun potential near'} venues ${fmtTime(fm)}\u2013${fmtTime(tm)} on ${dateKey(S.date)} \u00b7 tap a point to pin it`;
+  if(!anySunUp) note = shade
+    ? `The sun is down for that whole window on ${dateKey(S.date)} \u2014 everywhere's shaded already.`
+    : `The sun is down for that whole window on ${dateKey(S.date)} \u2014 try daylight hours.`;
+  else if(S.forecastOn){
+    const mc = meanCloud(fm, tm);
+    if(mc!=null && mc>=70) note += ' \u00b7 cloudy forecast';
+  }
+  if(S.forecastOn && !S.cloud[dateKey(S.date)]) note += ' \u00b7 Weather forecast unavailable; sunlight is geometric potential only.';
+  $('finderNote').textContent = note;
+  const wrap=$('finderResults'); wrap.innerHTML='';
+  for(const v of venues){
+    const pct = Math.round((shade ? (1-v.score) : v.score) * 100);
+    const good = pct>=70, mid = pct>=35;
+    const col = shade
+      ? (good ? '#5C7A99' : mid ? '#A9BAC7' : '#E7D9BE')
+      : (good ? '#F0A311' : mid ? '#E6BE5C' : '#9AA1AB');
+    const txtCol = mid ? (shade?'#3E5A73':'#C97E06') : '#57606C';
+    const row=document.createElement('button');
+    row.className='frow';
+    row.innerHTML=`<span class="fscore" style="color:${txtCol}">${modeIcon} ${pct}%</span>
+      <span class="fname">${v.precise?'At':'Near'} ${esc(v.name)}${v.outdoor?' \u00b7 \u26f1 outdoor seating':''}</span>
+      <span class="fdist">${Math.round(v.d)} m</span>`;
+    row.onclick=()=>{ setPin(v.lat,v.lng,`${v.precise?'At':'Near'} ${v.name}`); };
+    wrap.appendChild(row);
+    L.circleMarker([v.lat,v.lng], {radius:8, color:'#201B14', weight:1.5, fillColor:col, fillOpacity:.95})
+      .bindTooltip(`${v.precise?'At':'Near'} ${esc(v.name)} \u00b7 ${modeIcon} ${pct}%`)
+      .on('click', ()=>{ setPin(v.lat,v.lng,`${v.precise?'At':'Near'} ${v.name}`); })
+      .addTo(finderLayer);
+  }
+}
+
+/* ---------------- draggable three-state sheet ---------------- */
 // States: 'collapsed' (place name only) â†’ 'peek' (through the toggle chips,
 // the default once a spot is picked) â†’ 'full' (everything, scrolls internally).
 let sheetState = 'collapsed';
@@ -713,4 +1701,3 @@ setInterval(renderAmbient, 60000);
 </script>
 </body>
 </html>
-
