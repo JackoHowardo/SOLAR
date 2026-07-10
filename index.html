@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Sun Spot — when the sun hits here</title>
+<title>Sun Spot â€” when the sun hits here</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
@@ -215,10 +215,10 @@
 <div id="map"></div>
 
 <div class="search-wrap">
-  <div class="search-bar">
+  <form class="search-bar" id="searchForm" role="search">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-    <input id="searchInput" type="search" placeholder="Search a bar, street, city…" autocomplete="off" enterkeyhint="search">
-  </div>
+    <input id="searchInput" type="search" placeholder="Search a bar, street, cityâ€¦" autocomplete="off" enterkeyhint="search">
+  </form>
   <div id="searchResults" class="search-results" role="listbox"></div>
 </div>
 
@@ -228,13 +228,13 @@
 <button class="fab" id="locateBtn" aria-label="Drop a pin where I am" aria-pressed="false">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#201B14" stroke-width="2"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2" fill="#201B14"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke-linecap="round"/></svg>
 </button>
-<button class="fab" id="scanBtn" aria-label="Draw a zone to find the sunniest spots" aria-pressed="false">
+<button class="fab" id="scanBtn" aria-label="Draw a zone to find the sunniest points" aria-pressed="false">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#201B14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18l4-13 6 4 6-7v14z"/></svg>
 </button>
 <div class="toast" id="toast" role="status"></div>
 
 <div class="draw-bar" id="drawBar" hidden>
-  <span><span id="scanCount">0</span> point(s) — trace your zone</span>
+  <span><span id="scanCount">0</span> point(s) â€” trace your zone</span>
   <button class="db-cancel" id="scanCancel" type="button">Cancel</button>
   <button class="db-done" id="scanDone" type="button" disabled>Done</button>
 </div>
@@ -242,9 +242,9 @@
 <div class="scan-strip" id="scanStrip" hidden>
   <div class="scan-strip-head">
     <div class="spin" id="scanSpin" hidden></div>
-    <span class="sh-title" id="scanHead">Sunniest spots</span>
-    <button id="scanRescan" type="button" aria-label="Rescan this zone">↻</button>
-    <button id="scanClose" type="button" aria-label="Close">✕</button>
+    <span class="sh-title" id="scanHead">Sunniest points</span>
+    <button id="scanRescan" type="button" aria-label="Rescan this zone">â†»</button>
+    <button id="scanClose" type="button" aria-label="Close">âœ•</button>
   </div>
   <div class="scan-list" id="scanList"></div>
 </div>
@@ -259,12 +259,12 @@
     </div>
   </div>
   <div class="sheet-body" id="sheetBody">
-    <div class="empty" id="emptyMsg">The gold cone shows <b>where the sun is right now</b> over the map, and the dotted arc is its path today. Drop a pin anywhere and I'll pull the surrounding buildings and trees, tell you <b>exactly when direct sun reaches that spot</b>, and let you scrub through the day, compare places, and see the whole year.</div>
+    <div class="empty" id="emptyMsg">The gold cone shows <b>where the sun is right now</b> over the map, and the dotted arc is its path today. Drop a pin anywhere and I'll pull the surrounding buildings and trees, <b>estimate when direct sun reaches that spot</b>, and let you scrub through the day, compare places, and see the whole year.</div>
     <div id="results" hidden>
       <div class="ribbon-block">
         <div class="ribbon-time">
           <div class="time-ctrl">
-            <button class="tbtn" id="hourDown" aria-label="Back one hour">−1 h</button>
+            <button class="tbtn" id="hourDown" aria-label="Back one hour">âˆ’1 h</button>
             <span class="now" id="timeLabel">12:00</span>
             <button class="tbtn" id="hourUp" aria-label="Forward one hour">+1 h</button>
             <button class="tbtn tbtn-now" id="btnNow">Now</button>
@@ -284,10 +284,10 @@
         <button class="chip" id="chipToday">Today</button>
       </div>
       <div class="chips">
-        <button class="chip" id="chipTrees" aria-pressed="true">🌳 Trees on</button>
-        <button class="chip" id="chipCloud" aria-pressed="true">☁ Forecast on</button>
-        <button class="chip" id="chipCompare" aria-pressed="false">⇄ Compare</button>
-        <button class="chip" id="chipFinder" aria-pressed="false">☀ Find sun</button>
+        <button class="chip" id="chipTrees" aria-pressed="true">ðŸŒ³ Trees on</button>
+        <button class="chip" id="chipCloud" aria-pressed="true">â˜ Forecast on</button>
+        <button class="chip" id="chipCompare" aria-pressed="false">â‡„ Compare</button>
+        <button class="chip" id="chipFinder" aria-pressed="false">â˜€ Find sun</button>
       </div>
 
       <div class="swipe-hint" id="swipeHint" aria-hidden="true">
@@ -296,18 +296,18 @@
 
       <div class="finder" id="finderBlock" hidden>
         <div class="seg" id="findMode" role="group" aria-label="Find sun or shade">
-          <button class="seg-btn active" data-mode="sun" type="button">☀ Sun</button>
-          <button class="seg-btn" data-mode="shade" type="button">🌥 Shade</button>
+          <button class="seg-btn active" data-mode="sun" type="button">â˜€ Sun</button>
+          <button class="seg-btn" data-mode="shade" type="button">ðŸŒ¥ Shade</button>
         </div>
         <div class="finder-row">
           <select id="findCat" aria-label="What kind of place">
             <option value="pub">Pubs &amp; beer gardens</option>
-            <option value="cafe">Cafés</option>
+            <option value="cafe">CafÃ©s</option>
             <option value="restaurant">Restaurants</option>
             <option value="bench">Benches &amp; picnic tables</option>
           </select>
           <input type="time" id="findFrom" aria-label="From">
-          <span>–</span>
+          <span>â€“</span>
           <input type="time" id="findTo" aria-label="Until">
           <button class="tbtn tbtn-now" id="findGo">Go</button>
         </div>
@@ -326,7 +326,7 @@
       <div class="windows" id="windowsList"></div>
 
       <div class="year-block">
-        <span class="sec-title">Year here — sun hours on the 21st of each month</span>
+        <span class="sec-title">Year here â€” sun hours on the 21st of each month</span>
         <div class="year-bars" id="yearBars"></div>
         <div class="year-note" id="yearNote"></div>
       </div>
@@ -336,8 +336,9 @@
         <input type="range" id="assumedH" min="4" max="24" step="1" value="9" aria-label="Assumed height for buildings with no data">
         <output id="assumedHOut">9 m</output>
       </div>
+      <details class="note"><summary><b>Accuracy and limitations</b></summary><p>Results are estimates. OpenStreetMap data may be incomplete; some building and tree heights are assumed; terrain is not currently modelled; and weather forecasts are only available for supported near-term dates.</p></details>
     </div>
-    <div class="loading-row" id="loadingRow" hidden><div class="spin"></div><span id="loadingText">Fetching buildings…</span></div>
+    <div class="loading-row" id="loadingRow" hidden><div class="spin"></div><span id="loadingText">Fetching buildingsâ€¦</span></div>
     <div class="error" id="errorRow" hidden></div>
   </div>
 </div>
@@ -347,13 +348,14 @@
 <script>
 'use strict';
 /* ============================================================
-   SUN SPOT v7 — where & when the sun hits a point
+   SUN SPOT v7 â€” where & when the sun hits a point
    Solar position: NOAA-style astronomy (no libraries)
    Obstructions: OSM buildings + trees via Overpass, OSM API fallback
    Cloud forecast: Open-Meteo (16 days ahead)
    ============================================================ */
 
 const $ = id => document.getElementById(id);
+const esc = value => String(value).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const RAD = Math.PI/180, DEG = 180/Math.PI;
 const GOLDEN_ALT = 7; // sun below this altitude (but up) = golden light
 
@@ -362,7 +364,7 @@ const map = L.map('map', {zoomControl:true, worldCopyJump:true, rotate:true, rot
   .setView([51.8985, -8.4756], 15); // Cork, obviously
 
 // Shadows live in their own pane: solid polygons inside, one opacity applied to the
-// merged result — so 100 overlapping shadows read as one shadow, like real shade.
+// merged result â€” so 100 overlapping shadows read as one shadow, like real shade.
 // Named 'sunShadowPane' (not 'shadowPane') and parented under the rotate plugin's
 // own rotating pane, so it pans/rotates in lockstep with tiles instead of being
 // silently mis-transformed by the rotate plugin's built-in shadowPane handling.
@@ -372,7 +374,7 @@ shadowPane.style.zIndex = 350;
 shadowPane.style.pointerEvents = 'none';
 
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a> Weather: <a href="https://open-meteo.com/">Open-Meteo</a>',
   subdomains:'abcd', maxZoom:20
 }).addTo(map);
 
@@ -401,6 +403,9 @@ const S = {
   day:null,               // {samples, azAt, altAt, segments, sunrise, sunset, total}
   insideBuilding:false,
   cloud:{},               // 'YYYY-MM-DD' -> [24 hourly cloud %]
+  timezone:'Europe/Dublin',
+  timezoneReady:false,
+  preserveDate:false,
   compare:null,           // {label, pin, day}
   pendingCompare:false,
   scan:null,               // {pts, date} of the last zone scan, for rescanning
@@ -475,6 +480,23 @@ const compass = az => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW',
 const fmtTime = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(Math.round(m)%60).padStart(2,'0')}`;
 const fmtDur = m => m>=60 ? `${Math.floor(m/60)} h ${String(Math.round(m%60)).padStart(2,'0')} m` : `${Math.round(m)} m`;
 const dateKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function zonedParts(date, timeZone){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date);
+  return Object.fromEntries(parts.filter(p=>p.type!=='literal').map(p=>[p.type,+p.value]));
+}
+function zonedDateKey(date, timeZone=S.timezone){ const p=zonedParts(date,timeZone); return `${p.year}-${String(p.month).padStart(2,'0')}-${String(p.day).padStart(2,'0')}`; }
+function zonedMinutes(date, timeZone=S.timezone){ const p=zonedParts(date,timeZone); return p.hour*60+p.minute; }
+function civilDateTimeToUtc(key, minutes, timeZone=S.timezone){
+  const [year,month,day]=key.split('-').map(Number), hour=Math.floor(minutes/60), minute=minutes%60;
+  const target=Date.UTC(year,month-1,day,hour,minute); let guess=target;
+  for(let i=0;i<4;i++){
+    const p=zonedParts(new Date(guess),timeZone);
+    const represented=Date.UTC(p.year,p.month-1,p.day,p.hour,p.minute);
+    const next=guess+(target-represented); if(next===guess) break; guess=next;
+  }
+  return new Date(guess);
+}
+function dateFromKey(key){ const [y,m,d]=key.split('-').map(Number); return new Date(y,m-1,d,12); }
 
 /* ---------------- obstruction data (buildings + trees) ---------------- */
 const OVERPASS = [
@@ -516,32 +538,36 @@ async function fetchFromOsmApi(pin, radius=320, withVenues=false){
   return out;
 }
 async function fetchArea(center, radius, withVenues, onStatus){
-  if(onStatus) onStatus('Fetching map data (racing 4 sources)…');
+  if(onStatus) onStatus('Fetching map dataâ€¦');
   const c = `${center.lat.toFixed(6)},${center.lng.toFixed(6)}`;
   let q = `[out:json][timeout:23];(way["building"](around:${radius},${c});node["natural"="tree"](around:${radius},${c});way["natural"="tree_row"](around:${radius},${c});way["natural"="wood"](around:${radius},${c});way["landuse"="forest"](around:${radius},${c});`;
   if(withVenues) q += `nw["amenity"~"^(cafe|bar|pub|biergarten|restaurant|bench)$"](around:${radius},${c});node["leisure"="picnic_table"](around:${radius},${c});`;
+  if(!withVenues) q += `way["landuse"~"^(railway|military|industrial)$"](around:${radius},${c});way["man_made"~"^(wastewater_plant|works)$"](around:${radius},${c});`;
   q += `);out geom;`;
-  const attempts = OVERPASS.map(u =>
-    fetchJson(u+'?data='+encodeURIComponent(q), 25000).then(j => j.elements || [])
-  );
-  attempts.push(fetchFromOsmApi(center, radius, withVenues));
-  try{ return await Promise.any(attempts); }
-  catch(e){ throw new Error('all 4 data sources failed'); }
+  for(let i=0;i<OVERPASS.length;i++){
+    try{
+      if(onStatus && i) onStatus(`Map server ${i+1} of ${OVERPASS.length}â€¦`);
+      const j=await fetchJson(OVERPASS[i]+'?data='+encodeURIComponent(q),25000);
+      return j.elements||[];
+    }catch{}
+  }
+  if(onStatus) onStatus('Trying OpenStreetMap fallbackâ€¦');
+  try{ return await fetchFromOsmApi(center,radius,withVenues); }
+  catch{ throw new Error('all map data sources failed'); }
 }
 async function fetchObstructions(pin, onStatus){
   return fetchArea(pin, 320, false, onStatus);
 }
-// Best-effort only: used to keep the zone scan from picking a "sunny spot" that's actually
+// Best-effort only: used to keep the zone scan from picking a "sunny point" that's actually
 // in the middle of a river. Fails silently (returns no water) rather than blocking the scan.
 async function fetchWater(center, radius){
   const c = `${center.lat.toFixed(6)},${center.lng.toFixed(6)}`;
   const q = `[out:json][timeout:20];(way["natural"="water"](around:${radius},${c});way["waterway"="riverbank"](around:${radius},${c});way["waterway"~"^(river|stream|canal)$"](around:${radius},${c});way["natural"="bay"](around:${radius},${c});way["natural"="coastline"](around:${radius},${c}););out geom;`;
-  const attempts = OVERPASS.map(u => fetchJson(u+'?data='+encodeURIComponent(q), 18000).then(j=>j.elements||[]));
-  try{ return await Promise.any(attempts); }
-  catch{ return []; } // all sources failed — degrade gracefully rather than blocking the scan
+  for(const u of OVERPASS){ try{ const j=await fetchJson(u+'?data='+encodeURIComponent(q),18000); return j.elements||[]; }catch{} }
+  return []; // all sources failed â€” degrade gracefully rather than blocking the scan
 }
 function buildWaterPolys(elements, frame){
-  // Open sea/harbour is usually NOT tagged as an explicit water polygon at all — OSM marks
+  // Open sea/harbour is usually NOT tagged as an explicit water polygon at all â€” OSM marks
   // only the coastline itself, with the convention that the sea sits to the RIGHT of the
   // way's stored direction. Rivers/lakes/bays, on the other hand, ARE explicit polygons.
   const polys=[], coastSegs=[];
@@ -552,7 +578,7 @@ function buildWaterPolys(elements, frame){
     if(tags.natural==='coastline'){
       for(let i=0;i<raw.length-1;i++) coastSegs.push({a:raw[i], b:raw[i+1]});
     }else if(tags.waterway && tags.waterway!=='riverbank'){
-      // mapped as a line (common for narrower rivers/streams) — buffer into a strip
+      // mapped as a line (common for narrower rivers/streams) â€” buffer into a strip
       const halfW = tags.waterway==='stream' ? 4 : 14;
       for(let i=0;i<raw.length-1;i++){
         const a=raw[i], b=raw[i+1];
@@ -580,7 +606,16 @@ function isSeaSide(pt, coastSegs){
   return false;
 }
 function parseHeight(tags, fallback){
-  if(tags && tags.height){ const v=parseFloat(String(tags.height).replace(/[^\d.]/g,'')); if(v>0) return {h:v, hasData:true}; }
+  if(tags && tags.height){
+    const raw=String(tags.height).trim().toLowerCase().replace(',', '.');
+    const v=parseFloat(raw);
+    if(v>0){
+      const feet=/(?:\bft\b|feet|foot|')/.test(raw);
+      const inchMatch=raw.match(/(?:\d+\s*')?\s*(\d+(?:\.\d+)?)\s*(?:in|")/);
+      const metres=feet ? v*0.3048+(inchMatch?parseFloat(inchMatch[1])*0.0254:0) : v;
+      if(metres>0 && metres<1000) return {h:metres, hasData:true};
+    }
+  }
   if(tags && tags['building:levels']){ const l=parseFloat(tags['building:levels']); if(l>0) return {h:l*3.2+1, hasData:true}; }
   return {h:fallback, hasData:false};
 }
@@ -595,7 +630,7 @@ function prepareObstructions(elements, frame, assumed){
   const buildings=[], trees=[];
   for(const el of elements){
     const tags = el.tags || {};
-    // single trees → small square canopy
+    // single trees â†’ small square canopy
     if(el.lat!=null && tags.natural==='tree'){
       const c = frame.toXY({lat:el.lat, lng:el.lon});
       const r = 2.5;
@@ -606,7 +641,7 @@ function prepareObstructions(elements, frame, assumed){
     }
     if(!el.geometry || el.geometry.length<2) continue;
     const raw = el.geometry.map(g=>frame.toXY({lat:g.lat, lng:g.lon}));
-    // tree rows → thin quads per segment
+    // tree rows â†’ thin quads per segment
     if(tags.natural==='tree_row'){
       for(let i=0;i<raw.length-1;i++){
         const a=raw[i], b=raw[i+1];
@@ -618,7 +653,7 @@ function prepareObstructions(elements, frame, assumed){
       continue;
     }
     if(raw.length<4) continue;
-    // woods & forests → canopy walls, buildings → buildings
+    // woods & forests â†’ canopy walls, buildings â†’ buildings
     if(tags.natural==='wood' || tags.landuse==='forest'){
       trees.push({pts:raw, h:10, hasData:false, kind:'tree', ...finishPoly(raw, frame)});
     }else if(tags.building){
@@ -638,8 +673,8 @@ async function fetchCloud(pin){
       const day=t.slice(0,10);
       (out[day] = out[day] || [])[+t.slice(11,13)] = j.hourly.cloud_cover[i];
     });
-    return out;
-  }catch{ return {}; }
+    return {cloud:out, timezone:j.timezone||'UTC'};
+  }catch{ return {cloud:{}, timezone:null}; }
 }
 
 /* ---------------- day computation ---------------- */
@@ -653,12 +688,12 @@ function activeSet(){
   return act;
 }
 function computeDayFor(date, act, pin){
-  const base = midnightOf(date);
+  const key = dateKey(date);
   const n = 1440/STEP;
   const samples=new Array(n), azAt=new Array(n), altAt=new Array(n);
   let sunrise=null, sunset=null, prevUp=false;
   for(let i=0;i<n;i++){
-    const t = new Date(base.getTime() + i*STEP*60000);
+    const t = civilDateTimeToUtc(key, i*STEP);
     const {alt, az} = sunPosition(t, pin.lat, pin.lng);
     azAt[i]=az; altAt[i]=alt;
     const up = alt > 0.4;
@@ -729,21 +764,26 @@ function renderWindows(){
     r.innerHTML=`<span class="win-dot ${dotCls}"></span><span class="win-main">${main}</span><span class="win-side">${side}</span>`;
     el.appendChild(r);
   };
-  if(D.sunrise!==null) addRow('rise', `Sunrise <b>${fmtTime(D.sunrise)}</b> · Sunset <b>${fmtTime(D.sunset??1439)}</b>`, `day ${fmtDur((D.sunset??1440)-D.sunrise)}`);
+  if(D.sunrise!==null) addRow('rise', `Sunrise <b>${fmtTime(D.sunrise)}</b> Â· Sunset <b>${fmtTime(D.sunset??1439)}</b>`, `day ${fmtDur((D.sunset??1440)-D.sunrise)}`);
   if(D.segments.length===0){
     addRow('', `<b>No direct sun</b> reaches this exact point`, D.sunrise===null?'polar night?':'shaded all day');
   }else{
     for(const seg of D.segments){
-      const dir = compass(seg.azFrom)===compass(seg.azTo) ? `from ${compass(seg.azFrom)}` : `${compass(seg.azFrom)} → ${compass(seg.azTo)}`;
+      const dir = compass(seg.azFrom)===compass(seg.azTo) ? `from ${compass(seg.azFrom)}` : `${compass(seg.azFrom)} â†’ ${compass(seg.azTo)}`;
       const mc = S.forecastOn ? meanCloud(seg.from, seg.to) : null;
-      const cl = mc==null ? '' : mc>=70 ? ' · ☁' : mc>=40 ? ' · ⛅' : ' · ☀';
-      addRow('sun', `Sun <b>${fmtTime(seg.from)} – ${fmtTime(seg.to)}</b>`, `${fmtDur(seg.to-seg.from)} · ${dir}${cl}`);
+      const cl = mc==null ? '' : mc>=70 ? ' Â· â˜' : mc>=40 ? ' Â· â›…' : ' Â· â˜€';
+      addRow('sun', `Sun <b>${fmtTime(seg.from)} â€“ ${fmtTime(seg.to)}</b>`, `${fmtDur(seg.to-seg.from)} Â· ${dir}${cl}`);
     }
   }
+  if(S.forecastOn && !S.cloud[dateKey(S.date)]){
+    const n=document.createElement('p'); n.className='note';
+    n.textContent='Weather forecast unavailable for this date. Showing potential direct sunlight based on sun position and surrounding obstructions.';
+    el.appendChild(n);
+  }
   const chip=$('totalChip'); chip.hidden=false;
-  chip.textContent = D.total>0 ? `☀ ${fmtDur(D.total)}` : 'No direct sun';
+  chip.textContent = D.total>0 ? `â˜€ ${fmtDur(D.total)}` : 'No direct sun';
   chip.classList.toggle('none', D.total===0);
-  if(S.insideBuilding) toast('Your pin is inside a building or wood — that shape is ignored; nudge the pin for accuracy');
+  if(S.insideBuilding) toast('Your pin is inside a building or wood â€” that shape is ignored; nudge the pin for accuracy');
 }
 function renderTimeState(){
   $('timeLabel').textContent = fmtTime(S.minutes);
@@ -752,8 +792,8 @@ function renderTimeState(){
   const hours = cloudHours();
   const cc = (st===2 && hours) ? hours[Math.floor(S.minutes/60)] : null;
   const lab=$('stateLabel');
-  let txt = golden ? 'Golden light' : st===2 ? 'In the sun' : st===1 ? 'In shade' : 'Night';
-  if(cc!=null && cc>=65) txt += ' · ☁';
+  let txt = st===2 ? 'Direct sun possible' : st===1 ? 'Building shade' : 'Night';
+  if(st===2 && cc!=null && cc>=65) txt += ' Â· cloudy forecast';
   lab.textContent = txt;
   lab.className = 'state ' + (golden ? 'golden' : st===2 ? 'sun' : st===1 ? 'shade' : 'night');
   $('ribbonCursor').style.left = (S.minutes/1440*100)+'%';
@@ -765,12 +805,12 @@ function renderCompare(){
   const rows=$('compareRows'); rows.innerHTML='';
   const mk=(label, day)=>{
     const r=document.createElement('div'); r.className='mini-row';
-    r.innerHTML=`<div class="mini-meta"><span class="nm">${label}</span><span class="tt">☀ ${day.total>0?fmtDur(day.total):'none'}</span></div>
+    r.innerHTML=`<div class="mini-meta"><span class="nm">${esc(label)}</span><span class="tt">â˜€ ${day.total>0?fmtDur(day.total):'none'}</span></div>
       <div class="mini-ribbon"><div class="mini-fill" style="background:${ribbonGradient(day)}"></div></div>`;
     rows.appendChild(r);
   };
-  mk('A · '+S.compare.label, S.compare.day);
-  mk('B · '+($('placeName').textContent), S.day);
+  mk('A Â· '+S.compare.label, S.compare.day);
+  mk('B Â· '+($('placeName').textContent), S.day);
 }
 
 /* ---------------- year strip ---------------- */
@@ -779,11 +819,11 @@ function initYearBars(){
   const wrap=$('yearBars'); wrap.innerHTML='';
   for(let m=0;m<12;m++){
     const b=document.createElement('div');
-    b.className='ybar pending'+(m===new Date().getMonth()?' cur':'');
+    b.className='ybar pending'+(m===S.date.getMonth()?' cur':'');
     b.innerHTML=`<span class="v"></span><div class="col" style="height:2px"></div><span class="m">${MONTHS[m]}</span>`;
     wrap.appendChild(b);
   }
-  $('yearNote').textContent='calculating…';
+  $('yearNote').textContent='calculatingâ€¦';
 }
 async function computeYear(){
   const token = ++S.yearToken;
@@ -793,14 +833,14 @@ async function computeYear(){
   for(let m=0;m<12;m++){
     await new Promise(r=>setTimeout(r, 30)); // keep UI responsive
     if(token!==S.yearToken || !S.pin) return;
-    const day = computeDayFor(new Date(year, m, 21), S.act, S.pin);
+    const day = computeDayFor(new Date(year, m, 21, 12), S.act, S.pin);
     const hrs = day.total/60;
     const bar = bars[m];
     bar.classList.remove('pending');
     bar.querySelector('.col').style.height = Math.max(3, hrs/16*58)+'px';
-    bar.querySelector('.v').textContent = hrs>=0.95 ? Math.round(hrs) : hrs>0 ? '½' : '0';
+    bar.querySelector('.v').textContent = hrs>=0.95 ? Math.round(hrs) : hrs>0 ? 'Â½' : '0';
   }
-  if(token===S.yearToken) $('yearNote').textContent='hours of direct sun · amber bar = this month';
+  if(token===S.yearToken) $('yearNote').textContent='hours of direct sun Â· amber bar = this month';
 }
 
 /* ---------------- rendering: map layers ---------------- */
@@ -815,7 +855,7 @@ function renderShadows(){
   shadowLayer.clearLayers(); coneLayer.clearLayers();
   if(!S.pin) return;
   const frame = localFrame(S.pin);
-  const t = new Date(midnightOf(S.date).getTime() + S.minutes*60000);
+  const t = civilDateTimeToUtc(dateKey(S.date), S.minutes);
   const {alt, az} = sunPosition(t, S.pin.lat, S.pin.lng);
   if(alt <= 0.4) return;
 
@@ -843,7 +883,7 @@ function renderSunArc(){
   if(!S.pin || S.day.sunrise===null) return;
   const frame=localFrame(S.pin), pts=[];
   for(let m=S.day.sunrise; m<=(S.day.sunset??1439); m+=20){
-    const t=new Date(midnightOf(S.date).getTime()+m*60000);
+    const t=civilDateTimeToUtc(dateKey(S.date),m);
     const {az}=sunPosition(t,S.pin.lat,S.pin.lng);
     const ll=frame.toLL({x:Math.sin(az*RAD)*70, y:Math.cos(az*RAD)*70});
     pts.push([ll.lat,ll.lng]);
@@ -891,20 +931,26 @@ async function setPin(lat, lng, label){
 
   const token=++S.fetchToken;
   const now=new Date();
-  if(midnightOf(S.date).getTime()===midnightOf(now).getTime()){
-    S.minutes = now.getHours()*60 + now.getMinutes();
-    $('ribbonInput').value = S.minutes;
-  }
   if(!label){ reverseGeocode(lat,lng).then(n=>{ if(n && token===S.fetchToken){ $('placeName').textContent=n; if(S.day) renderCompare(); } }); }
-  fetchCloud(S.pin).then(c=>{ if(token===S.fetchToken){ S.cloud=c; if(S.day && !$('results').hidden){ renderRibbon(); renderWindows(); renderTimeState(); } } });
+  const weatherPromise=fetchCloud(S.pin);
 
   try{
-    const els = await fetchObstructions(S.pin, msg=>{ if(token===S.fetchToken) $('loadingText').textContent=msg; });
+    const [els,weather] = await Promise.all([
+      fetchObstructions(S.pin,msg=>{ if(token===S.fetchToken) $('loadingText').textContent=msg; }),
+      weatherPromise
+    ]);
     if(token!==S.fetchToken) return;
+    if(weather.timezone){ S.timezone=weather.timezone; S.timezoneReady=true; }
+    S.cloud=weather.cloud;
+    const todayKey=zonedDateKey(now);
+    if(!S.preserveDate){
+      S.date=dateFromKey(todayKey); dateInput.value=todayKey;
+      S.minutes=zonedMinutes(now); $('ribbonInput').value=S.minutes;
+    }
     const frame=localFrame(S.pin);
     const {buildings, trees} = prepareObstructions(els, frame, +$('assumedH').value);
     S.buildings=buildings; S.trees=trees;
-    $('loadingText').textContent='Tracing the sun…';
+    $('loadingText').textContent='Tracing the sunâ€¦';
     await new Promise(r=>setTimeout(r,20));
     if(token!==S.fetchToken) return;
     renderFootprints();
@@ -917,7 +963,7 @@ async function setPin(lat, lng, label){
     if(token!==S.fetchToken) return;
     $('loadingRow').hidden=true;
     const er=$('errorRow'); er.hidden=false;
-    er.innerHTML=`Couldn't reach the map database (${e.message}). If you're viewing a published/preview version, the sandbox may block map data — the downloaded file in a browser works fully. <button id="retryBtn">Retry</button> <button id="skyBtn">Open-sky times</button>`;
+    er.innerHTML=`Couldn't reach the map database (${e.message}). If you're viewing a published/preview version, the sandbox may block map data â€” the downloaded file in a browser works fully. <button id="retryBtn">Retry</button> <button id="skyBtn">Open-sky times</button>`;
     goToSheetState('peek');
     nudgeAbovePeek();
     $('retryBtn').onclick=()=>setPin(lat,lng,label);
@@ -930,32 +976,42 @@ async function setPin(lat, lng, label){
 }
 
 /* ---------------- geocoding ---------------- */
+const geocodeCache=new Map();
+let lastGeocodeAt=0, geocodeQueue=Promise.resolve();
+function throttledGeocode(key, url){
+  if(geocodeCache.has(key)) return Promise.resolve(geocodeCache.get(key));
+  const job=geocodeQueue.then(async()=>{
+    const wait=Math.max(0,1100-(Date.now()-lastGeocodeAt));
+    if(wait) await new Promise(r=>setTimeout(r,wait));
+    lastGeocodeAt=Date.now();
+    const value=await fetchJson(url,10000);
+    if(geocodeCache.size>=40) geocodeCache.delete(geocodeCache.keys().next().value);
+    geocodeCache.set(key,value); return value;
+  });
+  geocodeQueue=job.catch(()=>{}); return job;
+}
 async function reverseGeocode(lat,lng){
   try{
-    const j=await fetchJson(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=17`, 10000);
+    const key=`r:${lat.toFixed(5)},${lng.toFixed(5)}`;
+    const j=await throttledGeocode(key,`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=17`);
     const a=j.address||{};
     return [a.amenity||a.tourism||a.leisure||a.building, a.road, a.neighbourhood||a.suburb||a.village||a.town||a.city]
       .filter(Boolean).slice(0,2).join(', ') || j.name || null;
   }catch{ return null; }
 }
-let searchTimer=null;
-$('searchInput').addEventListener('input', e=>{
-  clearTimeout(searchTimer);
-  const q=e.target.value.trim();
-  if(q.length<3){ $('searchResults').classList.remove('open'); return; }
-  searchTimer=setTimeout(()=>doSearch(q), 450);
-});
-$('searchInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ clearTimeout(searchTimer); doSearch(e.target.value.trim()); }});
+$('searchInput').addEventListener('input', ()=>$('searchResults').classList.remove('open'));
+$('searchForm').addEventListener('submit', e=>{ e.preventDefault(); doSearch($('searchInput').value.trim()); });
 async function doSearch(q){
   if(!q) return;
   try{
-    const list=await fetchJson(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`, 10000);
+    const normalized=q.toLocaleLowerCase().replace(/\s+/g,' ').trim();
+    const list=await throttledGeocode(`s:${normalized}`,`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`);
     const box=$('searchResults'); box.innerHTML='';
-    if(!list.length){ box.innerHTML='<button disabled>No results — try adding the city name</button>'; box.classList.add('open'); return; }
+    if(!list.length){ box.innerHTML='<button disabled>No results â€” try adding the city name</button>'; box.classList.add('open'); return; }
     for(const item of list){
       const b=document.createElement('button');
       const parts=item.display_name.split(', ');
-      b.innerHTML=`<b>${parts[0]}</b><span class="muted">${parts.slice(1,4).join(', ')}</span>`;
+      b.innerHTML=`<b>${esc(parts[0])}</b><span class="muted">${esc(parts.slice(1,4).join(', '))}</span>`;
       b.onclick=()=>{
         box.classList.remove('open');
         $('searchInput').value=parts[0];
@@ -984,8 +1040,9 @@ $('hourDown').addEventListener('click', ()=> setMinutes(S.minutes - 60));
 $('hourUp').addEventListener('click', ()=> setMinutes(S.minutes + 60));
 $('btnNow').addEventListener('click', ()=>{
   const n=new Date();
-  setDate(new Date(), 'chipToday');
-  setMinutes(n.getHours()*60 + n.getMinutes());
+  S.preserveDate=false;
+  setDate(dateFromKey(zonedDateKey(n)), 'chipToday');
+  setMinutes(zonedMinutes(n));
 });
 
 const dateInput=$('dateInput');
@@ -999,9 +1056,9 @@ function setDate(d, pressedId){
     updateHash();
   }
 }
-dateInput.addEventListener('change', ()=>{ const [y,m,dd]=dateInput.value.split('-').map(Number); if(y) setDate(new Date(y,m-1,dd), null); });
-$('chipToday').onclick=()=>setDate(new Date(),'chipToday');
-setDate(new Date(),'chipToday');
+dateInput.addEventListener('change', ()=>{ if(dateInput.value){ S.preserveDate=true; setDate(dateFromKey(dateInput.value), null); } });
+$('chipToday').onclick=()=>{ S.preserveDate=false; setDate(dateFromKey(zonedDateKey(new Date())),'chipToday'); };
+setDate(dateFromKey(zonedDateKey(new Date())),'chipToday');
 $('ribbonInput').value=S.minutes;
 
 $('assumedH').addEventListener('input', e=> $('assumedHOut').textContent=e.target.value+' m');
@@ -1016,7 +1073,7 @@ $('chipTrees').addEventListener('click', ()=>{
   S.treesOn = !S.treesOn;
   const c=$('chipTrees');
   c.setAttribute('aria-pressed', String(S.treesOn));
-  c.textContent = S.treesOn ? '🌳 Trees on' : '🌳 Trees off';
+  c.textContent = S.treesOn ? 'ðŸŒ³ Trees on' : 'ðŸŒ³ Trees off';
   if(S.pin && S.day){ renderFootprints(); recompute(); }
 });
 
@@ -1037,13 +1094,13 @@ $('compareClear').addEventListener('click', ()=>{
 /* find me */
 $('locateBtn').addEventListener('click', ()=>{
   if(!navigator.geolocation){ toast('No location support in this browser'); return; }
-  toast('Finding you…', 2000);
+  toast('Finding youâ€¦', 2000);
   navigator.geolocation.getCurrentPosition(
     pos=>{
       const {latitude:la, longitude:lo}=pos.coords;
       setPin(la,lo);
     },
-    ()=> toast('Location blocked — this works once the app is hosted on a website'),
+    ()=> toast('Location blocked â€” this works once the app is hosted on a website'),
     {enableHighAccuracy:true, timeout:9000}
   );
 });
@@ -1077,7 +1134,7 @@ $('chipFinder').addEventListener('click', ()=>{
   $('chipFinder').setAttribute('aria-pressed', String(!block.hidden));
   if(!block.hidden && !$('findFrom').value){
     const n=new Date();
-    let f=Math.min(n.getHours(), 19)*60;
+    let f=Math.min(Math.floor(zonedMinutes(n)/60), 19)*60;
     $('findFrom').value=fmtTime(f); $('findTo').value=fmtTime(Math.min(f+180, 1439));
   }
 });
@@ -1089,20 +1146,28 @@ function extractVenues(elements, frame, cat){
   for(const el of elements){
     const tg=el.tags||{}; const a=VENUE_RE.test(tg.amenity||'')?tg.amenity:(tg.leisure==='picnic_table'?'picnic_table':null);
     if(!a || !want.has(a)) continue;
-    let lat,lng;
-    if(el.lat!=null){ lat=el.lat; lng=el.lon; }
+    let lat,lng, samplePoints=[];
+    if(el.lat!=null){ lat=el.lat; lng=el.lon; samplePoints=[{lat,lng}]; }
     else if(el.center){ lat=el.center.lat; lng=el.center.lon; }
     else if(el.geometry && el.geometry.length){
       lat=el.geometry.reduce((s,g)=>s+g.lat,0)/el.geometry.length;
       lng=el.geometry.reduce((s,g)=>s+g.lon,0)/el.geometry.length;
+      const poly=el.geometry.map(g=>frame.toXY({lat:g.lat,lng:g.lon}));
+      for(let i=0;i<poly.length-1;i++){
+        const p=poly[i],q=poly[i+1],len=Math.hypot(q.x-p.x,q.y-p.y); if(len<2) continue;
+        const mid={x:(p.x+q.x)/2,y:(p.y+q.y)/2}, nx=-(q.y-p.y)/len*2.5, ny=(q.x-p.x)/len*2.5;
+        for(const sign of [1,-1]){ const pt={x:mid.x+nx*sign,y:mid.y+ny*sign}; if(!pointInPoly(pt,poly)) samplePoints.push(frame.toLL(pt)); }
+      }
     }else continue;
     const name = tg.name || (a==='bench'?'Bench':a==='picnic_table'?'Picnic table':null);
     if(!name) continue;
     const key=name+lat.toFixed(5); if(seen.has(key)) continue; seen.add(key);
     const p=frame.toXY({lat,lng});
-    out.push({name, lat, lng, x:p.x, y:p.y, outdoor:tg.outdoor_seating==='yes', d:Math.hypot(p.x,p.y)});
+    if(!samplePoints.length) samplePoints=[{lat,lng}];
+    const precise=el.lat!=null && (a==='bench' || a==='picnic_table');
+    out.push({name, lat, lng, x:p.x, y:p.y, samples:samplePoints.slice(0,12), precise, outdoor:tg.outdoor_seating==='yes', d:Math.hypot(p.x,p.y)});
   }
-  out.sort((q,w)=>q.d-w.d);
+  out.sort((q,w)=>(Number(w.outdoor)-Number(q.outdoor)) || q.d-w.d);
   return out.slice(0,40);
 }
 
@@ -1127,29 +1192,34 @@ async function runFinder(){
       return;
     }
     // precompute sun samples across the window (10-min steps)
-    const base=midnightOf(S.date), samples=[];
+    const samples=[];
     for(let m=fm; m<tm; m+=10){
-      const {alt, az}=sunPosition(new Date(base.getTime()+m*60000), c.lat, c.lng);
+      const {alt, az}=sunPosition(civilDateTimeToUtc(dateKey(S.date),m), c.lat, c.lng);
       samples.push({alt, dx:Math.sin(az*RAD), dy:Math.cos(az*RAD)});
     }
     const anySunUp = samples.some(s=>s.alt>0.4);
     for(const v of venues){
-      const near = obst.filter(o=>Math.hypot(o.cx-v.x, o.cy-v.y)<300 && !pointInPoly({x:v.x,y:v.y}, o.pts));
-      let sun=0;
-      for(const s of samples){
-        if(s.alt<=0.4) continue;
-        let blocked=false;
-        for(const o of near){
-          const hits=rayHitsO(v.x, v.y, s.dx, s.dy, o.pts, 400);
-          for(const d of hits){ if(Math.atan2(o.h, d)*DEG >= s.alt){ blocked=true; break; } }
-          if(blocked) break;
+      let best={score:-1,lat:v.lat,lng:v.lng,x:v.x,y:v.y};
+      for(const ll of v.samples){
+        const vp=frame.toXY(ll), near=obst.filter(o=>Math.hypot(o.cx-vp.x,o.cy-vp.y)<300 && !pointInPoly(vp,o.pts));
+        let sun=0;
+        for(const s of samples){
+          if(s.alt<=0.4) continue;
+          let blocked=false;
+          for(const o of near){
+            const hits=rayHitsO(vp.x,vp.y,s.dx,s.dy,o.pts,400);
+            for(const d of hits){ if(Math.atan2(o.h,d)*DEG>=s.alt){ blocked=true; break; } }
+            if(blocked) break;
+          }
+          if(!blocked) sun++;
         }
-        if(!blocked) sun++;
+        const score=samples.length?sun/samples.length:0;
+        if(score>best.score) best={score,lat:ll.lat,lng:ll.lng,x:vp.x,y:vp.y};
       }
-      v.score = samples.length ? sun/samples.length : 0;
+      Object.assign(v,best); v.d=Math.hypot(v.x,v.y);
     }
     const shade = finderMode==='shade';
-    venues.sort((a,b)=> shade ? (a.score-b.score || a.d-b.d) : (b.score-a.score || a.d-b.d));
+    venues.sort((a,b)=> Number(b.outdoor)-Number(a.outdoor) || (shade ? (a.score-b.score || a.d-b.d) : (b.score-a.score || a.d-b.d)));
     if(token!==finderToken) return;
     renderFinder(venues.slice(0,12), fm, tm, anySunUp, finderMode);
   }catch(e){
@@ -1160,14 +1230,15 @@ async function runFinder(){
 function renderFinder(venues, fm, tm, anySunUp, mode){
   const shade = mode==='shade';
   const modeIcon = shade ? '\ud83c\udf25' : '\u2600';
-  let note = `${shade?'Shadiest':'Sunniest'} ${fmtTime(fm)}\u2013${fmtTime(tm)} on ${dateKey(S.date)} \u00b7 tap a place to pin it`;
+  let note = `${shade?'Most building shade near':'Most direct-sun potential near'} venues ${fmtTime(fm)}\u2013${fmtTime(tm)} on ${dateKey(S.date)} \u00b7 tap a point to pin it`;
   if(!anySunUp) note = shade
     ? `The sun is down for that whole window on ${dateKey(S.date)} \u2014 everywhere's shaded already.`
     : `The sun is down for that whole window on ${dateKey(S.date)} \u2014 try daylight hours.`;
   else if(S.forecastOn){
     const mc = meanCloud(fm, tm);
-    if(mc!=null && mc>=70) note += shade ? ' \u00b7 \u2601 cloudy anyway, most spots will feel shaded' : ' \u00b7 \u2601 heavy cloud forecast';
+    if(mc!=null && mc>=70) note += ' \u00b7 cloudy forecast';
   }
+  if(S.forecastOn && !S.cloud[dateKey(S.date)]) note += ' \u00b7 Weather forecast unavailable; sunlight is geometric potential only.';
   $('finderNote').textContent = note;
   const wrap=$('finderResults'); wrap.innerHTML='';
   for(const v of venues){
@@ -1180,20 +1251,20 @@ function renderFinder(venues, fm, tm, anySunUp, mode){
     const row=document.createElement('button');
     row.className='frow';
     row.innerHTML=`<span class="fscore" style="color:${txtCol}">${modeIcon} ${pct}%</span>
-      <span class="fname">${v.name}${v.outdoor?' \u00b7 \u26f1 outdoor seating':''}</span>
+      <span class="fname">${v.precise?'At':'Near'} ${esc(v.name)}${v.outdoor?' \u00b7 \u26f1 outdoor seating':''}</span>
       <span class="fdist">${Math.round(v.d)} m</span>`;
-    row.onclick=()=>{ setPin(v.lat, v.lng, v.name); };
+    row.onclick=()=>{ setPin(v.lat,v.lng,`${v.precise?'At':'Near'} ${v.name}`); };
     wrap.appendChild(row);
     L.circleMarker([v.lat,v.lng], {radius:8, color:'#201B14', weight:1.5, fillColor:col, fillOpacity:.95})
-      .bindTooltip(`${v.name} \u00b7 ${modeIcon} ${pct}%`)
-      .on('click', ()=>{ setPin(v.lat, v.lng, v.name); })
+      .bindTooltip(`${v.precise?'At':'Near'} ${esc(v.name)} \u00b7 ${modeIcon} ${pct}%`)
+      .on('click', ()=>{ setPin(v.lat,v.lng,`${v.precise?'At':'Near'} ${v.name}`); })
       .addTo(finderLayer);
   }
 }
 
 /* ---------------- draggable three-state sheet ---------------- */
-// States: 'collapsed' (place name only) → 'peek' (through the toggle chips,
-// the default once a spot is picked) → 'full' (everything, scrolls internally).
+// States: 'collapsed' (place name only) â†’ 'peek' (through the toggle chips,
+// the default once a spot is picked) â†’ 'full' (everything, scrolls internally).
 let sheetState = 'collapsed';
 function sheetOffsets(){
   const sheet=$('sheet'), total=sheet.offsetHeight, headH=$('sheetHead').offsetHeight;
@@ -1272,7 +1343,7 @@ function goToSheetState(state, withTransition=true){
 window.addEventListener('resize', ()=> goToSheetState(sheetState, false));
 goToSheetState('collapsed', false);
 
-/* ---------------- sun zone scan: draw a zone, rank the sunniest spots in it ---------------- */
+/* ---------------- sun zone scan: draw a zone, rank the sunniest points in it ---------------- */
 const scanDraftLayer = L.layerGroup().addTo(map);
 const scanZoneLayer = L.layerGroup().addTo(map);
 const scanResultLayer = L.layerGroup().addTo(map);
@@ -1316,7 +1387,7 @@ function startScanMode(){
   $('drawBar').hidden=false;
   updateScanDraft();
   $('scanBtn').setAttribute('aria-pressed','true');
-  toast('Tap the map to trace your zone — add at least 3 points');
+  toast('Tap the map to trace your zone â€” add at least 3 points');
 }
 function cancelScanMode(){
   scanMode=false; scanPts=[];
@@ -1343,7 +1414,7 @@ function finishScanDraw(){
 }
 $('scanBtn').addEventListener('click', ()=>{
   if(scanMode) cancelScanMode();
-  else if(S.scan) clearScanResults(); // scan-strip's own ✕ can end up covered by the detail sheet — this always works
+  else if(S.scan) clearScanResults(); // scan-strip's own âœ• can end up covered by the detail sheet â€” this always works
   else startScanMode();
 });
 function clearScanResults(){
@@ -1370,12 +1441,12 @@ async function runZoneScan(pts){
 
   $('scanStrip').hidden=false;
   $('scanSpin').hidden=false;
-  $('scanHead').textContent='Scanning zone…';
+  $('scanHead').textContent='Scanning zoneâ€¦';
   $('scanList').innerHTML='';
   L.polygon(pts.map(p=>[p.lat,p.lng]), {color:'#C97E06', weight:2, dashArray:'4 6', fillColor:'#F0A311', fillOpacity:.06, interactive:false}).addTo(scanZoneLayer);
 
   const area = scanShoelaceArea(zoneXY);
-  if(area < 20){ $('scanSpin').hidden=true; $('scanHead').textContent='That zone is too small — trace a bigger area.'; return; }
+  if(area < 20){ $('scanSpin').hidden=true; $('scanHead').textContent='That zone is too small â€” trace a bigger area.'; return; }
 
   let elements, waterElements;
   try{
@@ -1384,13 +1455,16 @@ async function runZoneScan(pts){
       fetchWater({lat:cLat, lng:cLng}, radius)
     ]);
   }catch(e){
-    if(token===scanToken){ $('scanSpin').hidden=true; $('scanHead').textContent="Couldn't fetch map data for this zone — try again."; }
+    if(token===scanToken){ $('scanSpin').hidden=true; $('scanHead').textContent="Couldn't fetch map data for this zone â€” try again."; }
     return;
   }
   if(token!==scanToken) return;
   const {buildings, trees} = prepareObstructions(elements, frame, +$('assumedH').value);
   const obst = S.treesOn ? buildings.concat(trees) : buildings;
   const {polys: waterPolys, coastSegs} = buildWaterPolys(waterElements, frame);
+  const inaccessiblePolys=elements.filter(el=>el.geometry && el.geometry.length>=4 &&
+    (/^(railway|military|industrial)$/.test((el.tags||{}).landuse||'') || /^(wastewater_plant|works)$/.test((el.tags||{}).man_made||'')))
+    .map(el=>el.geometry.map(g=>frame.toXY({lat:g.lat,lng:g.lon})));
 
   // self-scaling grid: spacing grows with zone size so point count (and scan time) stays roughly constant
   let spacing = Math.max(6, Math.min(30, Math.sqrt(area/220)));
@@ -1409,14 +1483,16 @@ async function runZoneScan(pts){
   }
   const outdoor = candidates.filter(pt =>
     !buildings.some(o => pointInPoly(pt, o.pts)) &&
+    !trees.some(o => pointInPoly(pt, o.pts)) &&
     !waterPolys.some(wp => pointInPoly(pt, wp)) &&
+    !inaccessiblePolys.some(wp => pointInPoly(pt, wp)) &&
     !isSeaSide(pt, coastSegs)
   );
-  if(!outdoor.length){ $('scanSpin').hidden=true; $('scanHead').textContent='No open ground in that zone — try a bigger area.'; return; }
+  if(!outdoor.length){ $('scanSpin').hidden=true; $('scanHead').textContent='No open ground in that zone â€” try a bigger area.'; return; }
 
-  const stepMin=16, samples=[], base=midnightOf(S.date);
+  const stepMin=16, samples=[];
   for(let m=0; m<1440; m+=stepMin){
-    const {alt,az} = sunPosition(new Date(base.getTime()+m*60000), cLat, cLng);
+    const {alt,az} = sunPosition(civilDateTimeToUtc(dateKey(S.date),m), cLat, cLng);
     if(alt>0.4) samples.push({dx:Math.sin(az*RAD), dy:Math.cos(az*RAD), alt});
   }
   if(!samples.length){ $('scanSpin').hidden=true; $('scanHead').textContent='The sun never rises on that date at this location.'; return; }
@@ -1443,7 +1519,7 @@ async function runZoneScan(pts){
     }
     if(token!==scanToken) return;
     if(i<outdoor.length){
-      $('scanHead').textContent = `Scanning… ${i}/${outdoor.length} points`;
+      $('scanHead').textContent = `Scanningâ€¦ ${i}/${outdoor.length} points`;
       setTimeout(chunk, 0);
     }else refineFinalists();
   }
@@ -1451,7 +1527,7 @@ async function runZoneScan(pts){
   // within 220m) so it can sweep hundreds of points quickly. That shortcut can let a
   // point rank higher than it deserves if what blocks it sits just beyond 220m. Before
   // committing to a top pick, re-check the strongest candidates with the same precision
-  // (4-min steps, 380m) used everywhere else in the app — so a result can never disagree
+  // (4-min steps, 380m) used everywhere else in the app â€” so a result can never disagree
   // with what tapping it shows.
   function refineFinalists(){
     if(token!==scanToken) return;
@@ -1459,10 +1535,10 @@ async function runZoneScan(pts){
     const finalists = results.slice(0, Math.min(40, results.length));
     const fineStep=4, fineSamples=[];
     for(let m=0; m<1440; m+=fineStep){
-      const {alt,az} = sunPosition(new Date(base.getTime()+m*60000), cLat, cLng);
+      const {alt,az} = sunPosition(civilDateTimeToUtc(dateKey(S.date),m), cLat, cLng);
       if(alt>0.4) fineSamples.push({dx:Math.sin(az*RAD), dy:Math.cos(az*RAD), alt});
     }
-    $('scanHead').textContent = 'Double-checking the leading spots…';
+    $('scanHead').textContent = 'Double-checking the leading pointsâ€¦';
     let j=0;
     function refineChunk(){
       if(token!==scanToken) return;
@@ -1496,6 +1572,10 @@ async function runZoneScan(pts){
       if(picked.length>=5) break;
       if(picked.every(p=>Math.hypot(p.x-r.x,p.y-r.y)>=MIN_SEP)) picked.push(r);
     }
+    for(const r of finalists){
+      if(picked.length>=5) break;
+      if(!picked.includes(r)) picked.push(r);
+    }
     const maxMin = picked.length ? picked[0].minutes : 0;
     scanResultLayer.clearLayers();
     const listEl=$('scanList'); listEl.innerHTML='';
@@ -1505,18 +1585,18 @@ async function runZoneScan(pts){
       const col = pct>=0.75 ? '#F0A311' : pct>=0.4 ? '#E6BE5C' : '#C2B295';
       L.marker([ll.lat,ll.lng], {icon:L.divIcon({className:'', iconSize:[26,26], iconAnchor:[13,13],
         html:`<div style="width:26px;height:26px;border-radius:50%;background:${col};border:1.5px solid #201B14;display:flex;align-items:center;justify-content:center;font:700 12px 'Space Grotesk',sans-serif;color:#201B14;box-shadow:0 2px 0 #201B14;">${idx+1}</div>`})})
-        .on('click', ()=> setPin(ll.lat, ll.lng, `Sunny spot #${idx+1}`))
+        .on('click', ()=> setPin(ll.lat, ll.lng, `Sunny point #${idx+1}`))
         .addTo(scanResultLayer);
       const card=document.createElement('button');
       card.className='scan-card'; card.type='button';
       card.innerHTML = `<span class="scan-rank">#${idx+1}</span><span class="scan-hrs">${fmtDur(r.minutes)}</span>`;
-      card.onclick = ()=> setPin(ll.lat, ll.lng, `Sunny spot #${idx+1}`);
+      card.onclick = ()=> setPin(ll.lat, ll.lng, `Sunny point #${idx+1}`);
       listEl.appendChild(card);
     });
     $('scanSpin').hidden=true;
     $('scanHead').textContent = picked.length
-      ? `☀ Top ${picked.length} · ${dateKey(S.date)}`
-      : 'No standout sunny spots found in that zone.';
+      ? `â˜€ Top ${picked.length} points Â· access or seating not guaranteed`
+      : 'No standout sunny points found in that zone.';
     S.scan = {pts, date:new Date(S.date)};
     $('scanBtn').setAttribute('aria-pressed', picked.length ? 'true' : 'false');
   }
@@ -1563,11 +1643,11 @@ async function compassToggle(){
   $('compassBtn').setAttribute('aria-pressed','true');
   window.addEventListener('deviceorientationabsolute', onOrient, true);
   window.addEventListener('deviceorientation', onOrient, true);
-  toast('Compass on — the map now turns as you do');
+  toast('Compass on â€” the map now turns as you do');
   setTimeout(()=>{
     if(compassOn && !gotHeading){
       compassOff();
-      toast('No compass signal — your browser is blocking motion sensors for this file. Hosting it on a website fixes this.');
+      toast('No compass signal â€” your browser is blocking motion sensors for this file. Hosting it on a website fixes this.');
     }
   }, 3500);
 }
@@ -1599,11 +1679,11 @@ function renderAmbient(){
     const tip = frame.toLL({x:Math.sin(az*RAD)*R*1.28, y:Math.cos(az*RAD)*R*1.28});
     L.circleMarker([tip.lat,tip.lng], {radius:8, color:'#201B14', weight:1.5, fillColor:'#F0A311', fillOpacity:1, interactive:false}).addTo(coneLayer);
     L.marker([tip.lat,tip.lng], {interactive:false, icon:L.divIcon({className:'', iconAnchor:[0,-14],
-      html:`<span class="sun-tag">Sun now · ${compass(az)} · ${Math.round(alt)}° high</span>`})}).addTo(coneLayer);
+      html:`<span class="sun-tag">Sun now Â· ${compass(az)} Â· ${Math.round(alt)}Â° high</span>`})}).addTo(coneLayer);
   }else{
     const c2 = map.getCenter();
     L.marker([c2.lat, c2.lng], {interactive:false, icon:L.divIcon({className:'', iconAnchor:[0,0],
-      html:`<span class="sun-tag">Sun is down — tap anywhere for tomorrow's light</span>`})}).addTo(coneLayer);
+      html:`<span class="sun-tag">Sun is down â€” tap anywhere for tomorrow's light</span>`})}).addTo(coneLayer);
   }
 }
 map.on('moveend zoomend', renderAmbient);
@@ -1615,7 +1695,7 @@ setInterval(renderAmbient, 60000);
   const m = location.hash.match(/p=(-?[\d.]+),(-?[\d.]+)(?:&d=(\d{4}-\d{2}-\d{2}))?/);
   if(!m) return;
   const la=+m[1], lo=+m[2];
-  if(m[3]){ const [y,mo,dd]=m[3].split('-').map(Number); setDate(new Date(y,mo-1,dd), null); }
+  if(m[3]){ S.preserveDate=true; setDate(dateFromKey(m[3]), null); }
   setTimeout(()=>setPin(la,lo), 100);
 })();
 </script>
