@@ -15,6 +15,12 @@
     --radius:16px;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
+  /* Several panels (draw-bar, loading-row, etc.) set their own `display` value in CSS
+     for layout (flex rows, etc.). Author CSS always beats the browser's default
+     [hidden]{display:none} rule, so without this, setting el.hidden=true in JS silently
+     does nothing wherever a class also declares display. This one rule makes hidden
+     always win, for every element, present and future. */
+  [hidden]{ display:none !important; }
   html,body{height:100%; overflow:hidden;}
   body{font-family:'Space Grotesk',system-ui,sans-serif; color:var(--ink); background:var(--cream);}
   #map{position:fixed; inset:0; z-index:1; background:var(--cream);}
@@ -40,10 +46,32 @@
     border:1.5px solid var(--ink); background:var(--paper); box-shadow:0 2px 0 var(--ink); cursor:pointer;
     display:flex; align-items:center; justify-content:center;}
   .fab[aria-pressed="true"]{background:var(--gold);}
-  #compassBtn{top:246px;} #locateBtn{top:300px;}
+  #compassBtn{top:246px;} #locateBtn{top:300px;} #scanBtn{top:354px;}
   .toast{position:fixed; left:50%; bottom:132px; transform:translateX(-50%); z-index:1200; background:var(--ink); color:var(--cream);
     font-size:12.5px; padding:9px 16px; border-radius:999px; max-width:88vw; text-align:center; opacity:0; pointer-events:none; transition:opacity .25s;}
   .toast.show{opacity:1;}
+
+  /* ---------- draw bar + scan results strip (kept off the main card) ---------- */
+  .draw-bar{position:fixed; top:72px; left:12px; right:12px; z-index:1000; max-width:420px; margin:0 auto;
+    background:var(--paper); border:1.5px solid var(--ink); border-radius:999px; box-shadow:0 3px 0 var(--ink);
+    padding:9px 8px 9px 16px; display:flex; align-items:center; gap:8px; font-size:12.5px;}
+  .draw-bar span{flex:1; font-weight:600;}
+  .draw-bar button{font:inherit; font-size:12px; font-weight:700; border:1.5px solid var(--ink); border-radius:999px; padding:6px 13px; cursor:pointer; background:var(--paper); color:var(--ink);}
+  .draw-bar .db-done{background:var(--gold);}
+  .draw-bar .db-done:disabled{opacity:.4; cursor:default;}
+
+  .scan-strip{position:fixed; left:0; right:0; bottom:112px; z-index:999; background:var(--paper);
+    border-top:1.5px solid var(--ink); border-bottom:1.5px solid var(--ink);
+    box-shadow:0 2px 10px rgba(32,27,20,.14); padding:10px 16px 12px;}
+  .scan-strip-head{display:flex; align-items:center; gap:7px; margin-bottom:8px;}
+  .scan-strip-head .sh-title{flex:1; font-size:12.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .scan-strip-head button{font:inherit; font-size:12px; font-weight:700; border:1.5px solid var(--ink); background:var(--paper);
+    border-radius:999px; width:26px; height:26px; cursor:pointer; flex:none; display:flex; align-items:center; justify-content:center;}
+  .scan-list{display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; -webkit-overflow-scrolling:touch;}
+  .scan-card{flex:none; display:flex; flex-direction:column; align-items:center; gap:2px; border:1.5px solid var(--ink); border-radius:10px;
+    background:var(--cream); padding:7px 13px; font:inherit; cursor:pointer;}
+  .scan-rank{font-size:9.5px; font-weight:700; color:var(--ink-soft);}
+  .scan-hrs{font-family:'Fraunces',serif; font-weight:650; font-size:14px; white-space:nowrap;}
 
   /* ---------- bottom sheet ---------- */
   .sheet{position:fixed; left:0; right:0; bottom:0; z-index:1000; background:var(--paper);
@@ -176,6 +204,8 @@
     .search-wrap{left:16px; margin:0;}
     .sheet{left:16px; right:auto; bottom:16px; width:400px; border:1.5px solid var(--ink); border-radius:20px; box-shadow:0 4px 0 var(--ink); max-height:calc(100vh - 110px);}
     .sheet.collapsed{transform:translateY(calc(100% - 118px + 16px));}
+    .draw-bar{left:16px; margin:0;}
+    .scan-strip{left:16px; right:auto; width:400px; bottom:150px; border-radius:16px; border:1.5px solid var(--ink);}
   }
   @media (prefers-reduced-motion:reduce){ .sheet{transition:none;} .spin{animation-duration:2s;} .ybar .col{transition:none;} }
 </style>
@@ -198,7 +228,26 @@
 <button class="fab" id="locateBtn" aria-label="Drop a pin where I am" aria-pressed="false">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#201B14" stroke-width="2"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2" fill="#201B14"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke-linecap="round"/></svg>
 </button>
+<button class="fab" id="scanBtn" aria-label="Draw a zone to find the sunniest spots" aria-pressed="false">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#201B14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18l4-13 6 4 6-7v14z"/></svg>
+</button>
 <div class="toast" id="toast" role="status"></div>
+
+<div class="draw-bar" id="drawBar" hidden>
+  <span><span id="scanCount">0</span> point(s) — trace your zone</span>
+  <button class="db-cancel" id="scanCancel" type="button">Cancel</button>
+  <button class="db-done" id="scanDone" type="button" disabled>Done</button>
+</div>
+
+<div class="scan-strip" id="scanStrip" hidden>
+  <div class="scan-strip-head">
+    <div class="spin" id="scanSpin" hidden></div>
+    <span class="sh-title" id="scanHead">Sunniest spots</span>
+    <button id="scanRescan" type="button" aria-label="Rescan this zone">↻</button>
+    <button id="scanClose" type="button" aria-label="Close">✕</button>
+  </div>
+  <div class="scan-list" id="scanList"></div>
+</div>
 
 <div class="sheet collapsed" id="sheet">
   <div class="sheet-head" id="sheetHead">
@@ -354,6 +403,7 @@ const S = {
   cloud:{},               // 'YYYY-MM-DD' -> [24 hourly cloud %]
   compare:null,           // {label, pin, day}
   pendingCompare:false,
+  scan:null,               // {pts, date} of the last zone scan, for rescanning
   fetchToken:0, yearToken:0
 };
 
@@ -480,6 +530,54 @@ async function fetchArea(center, radius, withVenues, onStatus){
 }
 async function fetchObstructions(pin, onStatus){
   return fetchArea(pin, 320, false, onStatus);
+}
+// Best-effort only: used to keep the zone scan from picking a "sunny spot" that's actually
+// in the middle of a river. Fails silently (returns no water) rather than blocking the scan.
+async function fetchWater(center, radius){
+  const c = `${center.lat.toFixed(6)},${center.lng.toFixed(6)}`;
+  const q = `[out:json][timeout:20];(way["natural"="water"](around:${radius},${c});way["waterway"="riverbank"](around:${radius},${c});way["waterway"~"^(river|stream|canal)$"](around:${radius},${c});way["natural"="bay"](around:${radius},${c});way["natural"="coastline"](around:${radius},${c}););out geom;`;
+  const attempts = OVERPASS.map(u => fetchJson(u+'?data='+encodeURIComponent(q), 18000).then(j=>j.elements||[]));
+  try{ return await Promise.any(attempts); }
+  catch{ return []; } // all sources failed — degrade gracefully rather than blocking the scan
+}
+function buildWaterPolys(elements, frame){
+  // Open sea/harbour is usually NOT tagged as an explicit water polygon at all — OSM marks
+  // only the coastline itself, with the convention that the sea sits to the RIGHT of the
+  // way's stored direction. Rivers/lakes/bays, on the other hand, ARE explicit polygons.
+  const polys=[], coastSegs=[];
+  for(const el of elements){
+    if(!el.geometry || el.geometry.length<2) continue;
+    const tags = el.tags||{};
+    const raw = el.geometry.map(g=>frame.toXY({lat:g.lat, lng:g.lon}));
+    if(tags.natural==='coastline'){
+      for(let i=0;i<raw.length-1;i++) coastSegs.push({a:raw[i], b:raw[i+1]});
+    }else if(tags.waterway && tags.waterway!=='riverbank'){
+      // mapped as a line (common for narrower rivers/streams) — buffer into a strip
+      const halfW = tags.waterway==='stream' ? 4 : 14;
+      for(let i=0;i<raw.length-1;i++){
+        const a=raw[i], b=raw[i+1];
+        const len=Math.hypot(b.x-a.x, b.y-a.y); if(len<0.5) continue;
+        const nx=-(b.y-a.y)/len*halfW, ny=(b.x-a.x)/len*halfW;
+        polys.push([{x:a.x+nx,y:a.y+ny},{x:b.x+nx,y:b.y+ny},{x:b.x-nx,y:b.y-ny},{x:a.x-nx,y:a.y-ny}]);
+      }
+    }else if(raw.length>=4){
+      polys.push(raw); // natural=water, waterway=riverbank, or natural=bay polygon
+    }
+  }
+  return {polys, coastSegs};
+}
+// A point counts as sea if it falls on the seaward side of any nearby coastline segment
+// (checked only near that segment's own span, so a distant unrelated stretch of coast
+// doesn't wrongly claim points on the opposite side of the peninsula).
+function isSeaSide(pt, coastSegs){
+  for(const {a,b} of coastSegs){
+    const len = Math.hypot(b.x-a.x, b.y-a.y); if(len<1) continue;
+    const t = ((pt.x-a.x)*(b.x-a.x)+(pt.y-a.y)*(b.y-a.y))/(len*len);
+    if(t < -0.25 || t > 1.25) continue;
+    const cross = (b.x-a.x)*(pt.y-a.y) - (b.y-a.y)*(pt.x-a.x);
+    if(cross < 0) return true; // right of the way's direction = sea, by OSM coastline convention
+  }
+  return false;
 }
 function parseHeight(tags, fallback){
   if(tags && tags.height){ const v=parseFloat(String(tags.height).replace(/[^\d.]/g,'')); if(v>0) return {h:v, hasData:true}; }
@@ -771,6 +869,7 @@ function updateHash(){
 }
 
 async function setPin(lat, lng, label){
+  if(scanMode) cancelScanMode(); // in case search/locate/finder fires mid-draw
   // compare handoff: keep the previous pin as A
   if(S.pendingCompare && S.pin && S.day){
     S.compare = {label: $('placeName').textContent, pin: S.pin, day: S.day};
@@ -870,7 +969,10 @@ async function doSearch(q){
 document.addEventListener('click', e=>{ if(!e.target.closest('.search-wrap')) $('searchResults').classList.remove('open'); });
 
 /* ---------------- events ---------------- */
-map.on('click', e=> setPin(e.latlng.lat, e.latlng.lng));
+map.on('click', e=>{
+  if(scanMode){ handleScanClick(e.latlng); return; }
+  setPin(e.latlng.lat, e.latlng.lng);
+});
 
 function setMinutes(m){
   S.minutes = Math.min(1439, Math.max(0, Math.round(m)));
@@ -1170,6 +1272,257 @@ function goToSheetState(state, withTransition=true){
 window.addEventListener('resize', ()=> goToSheetState(sheetState, false));
 goToSheetState('collapsed', false);
 
+/* ---------------- sun zone scan: draw a zone, rank the sunniest spots in it ---------------- */
+const scanDraftLayer = L.layerGroup().addTo(map);
+const scanZoneLayer = L.layerGroup().addTo(map);
+const scanResultLayer = L.layerGroup().addTo(map);
+let scanMode = false, scanPts = [], scanToken = 0;
+
+// These sit visually on top of the map but aren't Leaflet controls, so by default a tap
+// on them ALSO reaches the map underneath (adding a stray zone point mid-tap on Cancel/Done).
+// This tells Leaflet to treat them as opaque UI, same as it does for its own zoom control.
+L.DomEvent.disableClickPropagation($('drawBar'));
+L.DomEvent.disableScrollPropagation($('drawBar'));
+L.DomEvent.disableClickPropagation($('scanStrip'));
+L.DomEvent.disableScrollPropagation($('scanStrip'));
+
+function scanShoelaceArea(pts){
+  let a=0;
+  for(let i=0;i<pts.length;i++){ const p=pts[i], q=pts[(i+1)%pts.length]; a += p.x*q.y - q.x*p.y; }
+  return Math.abs(a)/2;
+}
+function updateScanDraft(){
+  scanDraftLayer.clearLayers();
+  for(const p of scanPts){
+    L.circleMarker([p.lat,p.lng], {radius:5, color:'#201B14', weight:1.5, fillColor:'#F0A311', fillOpacity:1, interactive:false}).addTo(scanDraftLayer);
+  }
+  if(scanPts.length>=2){
+    L.polyline(scanPts.map(p=>[p.lat,p.lng]), {color:'#C97E06', weight:2.5, interactive:false}).addTo(scanDraftLayer);
+  }
+  if(scanPts.length>=3){
+    const a=scanPts[scanPts.length-1], b=scanPts[0];
+    L.polyline([[a.lat,a.lng],[b.lat,b.lng]], {color:'#C97E06', weight:2, dashArray:'3 6', interactive:false}).addTo(scanDraftLayer);
+  }
+  $('scanCount').textContent = scanPts.length;
+  $('scanDone').disabled = scanPts.length<3;
+}
+function startScanMode(){
+  scanMode=true; scanPts=[];
+  scanZoneLayer.clearLayers(); scanResultLayer.clearLayers();
+  $('scanStrip').hidden=true;
+  $('finderBlock').hidden=true; $('chipFinder').setAttribute('aria-pressed','false');
+  S.pendingCompare=false; $('chipCompare').setAttribute('aria-pressed','false');
+  goToSheetState('collapsed');
+  $('drawBar').hidden=false;
+  updateScanDraft();
+  $('scanBtn').setAttribute('aria-pressed','true');
+  toast('Tap the map to trace your zone — add at least 3 points');
+}
+function cancelScanMode(){
+  scanMode=false; scanPts=[];
+  scanDraftLayer.clearLayers();
+  $('drawBar').hidden=true;
+  $('scanBtn').setAttribute('aria-pressed','false');
+}
+function handleScanClick(latlng){
+  if(scanPts.length>=3){
+    const p0=map.latLngToContainerPoint([scanPts[0].lat, scanPts[0].lng]);
+    const pN=map.latLngToContainerPoint(latlng);
+    if(p0.distanceTo(pN) < 18){ finishScanDraw(); return; }
+  }
+  scanPts.push({lat:latlng.lat, lng:latlng.lng});
+  updateScanDraft();
+}
+function finishScanDraw(){
+  if(scanPts.length<3){ toast('Add at least 3 points to close a zone'); return; }
+  scanMode=false;
+  $('drawBar').hidden=true;
+  $('scanBtn').setAttribute('aria-pressed','false');
+  scanDraftLayer.clearLayers();
+  runZoneScan(scanPts.slice());
+}
+$('scanBtn').addEventListener('click', ()=>{
+  if(scanMode) cancelScanMode();
+  else if(S.scan) clearScanResults(); // scan-strip's own ✕ can end up covered by the detail sheet — this always works
+  else startScanMode();
+});
+function clearScanResults(){
+  scanToken++; // invalidate any in-flight scan so late results can't reappear
+  $('scanStrip').hidden=true;
+  $('scanSpin').hidden=true;
+  scanZoneLayer.clearLayers(); scanResultLayer.clearLayers();
+  S.scan=null;
+  $('scanBtn').setAttribute('aria-pressed','false');
+}
+$('scanCancel').addEventListener('click', e=>{ e.stopPropagation(); cancelScanMode(); });
+$('scanDone').addEventListener('click', e=>{ e.stopPropagation(); finishScanDraw(); });
+$('scanClose').addEventListener('click', clearScanResults);
+$('scanRescan').addEventListener('click', ()=>{ if(S.scan) runZoneScan(S.scan.pts); });
+
+async function runZoneScan(pts){
+  const token = ++scanToken;
+  scanZoneLayer.clearLayers(); scanResultLayer.clearLayers();
+  const cLat = pts.reduce((s,p)=>s+p.lat,0)/pts.length;
+  const cLng = pts.reduce((s,p)=>s+p.lng,0)/pts.length;
+  const frame = localFrame({lat:cLat, lng:cLng});
+  const zoneXY = pts.map(p=>frame.toXY(p));
+  const radius = Math.min(600, Math.max(...zoneXY.map(p=>Math.hypot(p.x,p.y))) + 150);
+
+  $('scanStrip').hidden=false;
+  $('scanSpin').hidden=false;
+  $('scanHead').textContent='Scanning zone…';
+  $('scanList').innerHTML='';
+  L.polygon(pts.map(p=>[p.lat,p.lng]), {color:'#C97E06', weight:2, dashArray:'4 6', fillColor:'#F0A311', fillOpacity:.06, interactive:false}).addTo(scanZoneLayer);
+
+  const area = scanShoelaceArea(zoneXY);
+  if(area < 20){ $('scanSpin').hidden=true; $('scanHead').textContent='That zone is too small — trace a bigger area.'; return; }
+
+  let elements, waterElements;
+  try{
+    [elements, waterElements] = await Promise.all([
+      fetchArea({lat:cLat, lng:cLng}, radius, false, msg=>{ if(token===scanToken) $('scanHead').textContent=msg; }),
+      fetchWater({lat:cLat, lng:cLng}, radius)
+    ]);
+  }catch(e){
+    if(token===scanToken){ $('scanSpin').hidden=true; $('scanHead').textContent="Couldn't fetch map data for this zone — try again."; }
+    return;
+  }
+  if(token!==scanToken) return;
+  const {buildings, trees} = prepareObstructions(elements, frame, +$('assumedH').value);
+  const obst = S.treesOn ? buildings.concat(trees) : buildings;
+  const {polys: waterPolys, coastSegs} = buildWaterPolys(waterElements, frame);
+
+  // self-scaling grid: spacing grows with zone size so point count (and scan time) stays roughly constant
+  let spacing = Math.max(6, Math.min(30, Math.sqrt(area/220)));
+  const xs=zoneXY.map(p=>p.x), ys=zoneXY.map(p=>p.y);
+  const minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
+  const estIter = ((maxX-minX)/spacing) * ((maxY-minY)/spacing);
+  if(estIter > 6000) spacing = Math.sqrt(((maxX-minX)*(maxY-minY))/6000);
+  spacing = Math.max(spacing, 3);
+
+  const candidates=[];
+  for(let x=minX; x<=maxX; x+=spacing){
+    for(let y=minY; y<=maxY; y+=spacing){
+      const pt={x,y};
+      if(pointInPoly(pt, zoneXY)) candidates.push(pt);
+    }
+  }
+  const outdoor = candidates.filter(pt =>
+    !buildings.some(o => pointInPoly(pt, o.pts)) &&
+    !waterPolys.some(wp => pointInPoly(pt, wp)) &&
+    !isSeaSide(pt, coastSegs)
+  );
+  if(!outdoor.length){ $('scanSpin').hidden=true; $('scanHead').textContent='No open ground in that zone — try a bigger area.'; return; }
+
+  const stepMin=16, samples=[], base=midnightOf(S.date);
+  for(let m=0; m<1440; m+=stepMin){
+    const {alt,az} = sunPosition(new Date(base.getTime()+m*60000), cLat, cLng);
+    if(alt>0.4) samples.push({dx:Math.sin(az*RAD), dy:Math.cos(az*RAD), alt});
+  }
+  if(!samples.length){ $('scanSpin').hidden=true; $('scanHead').textContent='The sun never rises on that date at this location.'; return; }
+
+  const results=[];
+  let i=0;
+  function chunk(){
+    if(token!==scanToken) return;
+    const end=Math.min(outdoor.length, i+24);
+    for(; i<end; i++){
+      const pt=outdoor[i];
+      const near = obst.filter(o=>Math.hypot(o.cx-pt.x,o.cy-pt.y)<220);
+      let sunSamples=0;
+      for(const s of samples){
+        let blocked=false;
+        for(const o of near){
+          const hits=rayHitsO(pt.x,pt.y,s.dx,s.dy,o.pts,400);
+          for(const d of hits){ if(Math.atan2(o.h,d)*DEG >= s.alt){ blocked=true; break; } }
+          if(blocked) break;
+        }
+        if(!blocked) sunSamples++;
+      }
+      results.push({x:pt.x, y:pt.y, minutes:sunSamples*stepMin});
+    }
+    if(token!==scanToken) return;
+    if(i<outdoor.length){
+      $('scanHead').textContent = `Scanning… ${i}/${outdoor.length} points`;
+      setTimeout(chunk, 0);
+    }else refineFinalists();
+  }
+  // The pass above is intentionally fast and approximate (16-min steps, obstacles only
+  // within 220m) so it can sweep hundreds of points quickly. That shortcut can let a
+  // point rank higher than it deserves if what blocks it sits just beyond 220m. Before
+  // committing to a top pick, re-check the strongest candidates with the same precision
+  // (4-min steps, 380m) used everywhere else in the app — so a result can never disagree
+  // with what tapping it shows.
+  function refineFinalists(){
+    if(token!==scanToken) return;
+    results.sort((a,b)=> b.minutes-a.minutes);
+    const finalists = results.slice(0, Math.min(40, results.length));
+    const fineStep=4, fineSamples=[];
+    for(let m=0; m<1440; m+=fineStep){
+      const {alt,az} = sunPosition(new Date(base.getTime()+m*60000), cLat, cLng);
+      if(alt>0.4) fineSamples.push({dx:Math.sin(az*RAD), dy:Math.cos(az*RAD), alt});
+    }
+    $('scanHead').textContent = 'Double-checking the leading spots…';
+    let j=0;
+    function refineChunk(){
+      if(token!==scanToken) return;
+      const end=Math.min(finalists.length, j+10);
+      for(; j<end; j++){
+        const pt=finalists[j];
+        const near = obst.filter(o=>Math.hypot(o.cx-pt.x,o.cy-pt.y)<380);
+        let sunSamples=0;
+        for(const s of fineSamples){
+          let blocked=false;
+          for(const o of near){
+            const hits=rayHitsO(pt.x,pt.y,s.dx,s.dy,o.pts,400);
+            for(const d of hits){ if(Math.atan2(o.h,d)*DEG >= s.alt){ blocked=true; break; } }
+            if(blocked) break;
+          }
+          if(!blocked) sunSamples++;
+        }
+        pt.minutes = sunSamples*fineStep; // overwrite the rough estimate with the verified figure
+      }
+      if(j<finalists.length){ setTimeout(refineChunk, 0); }
+      else finishScan(finalists);
+    }
+    refineChunk();
+  }
+  function finishScan(finalists){
+    if(token!==scanToken) return;
+    finalists.sort((a,b)=> b.minutes-a.minutes);
+    // greedily spread picks so the top 5 covers the zone, not one clustered hotspot
+    const picked=[], MIN_SEP=20;
+    for(const r of finalists){
+      if(picked.length>=5) break;
+      if(picked.every(p=>Math.hypot(p.x-r.x,p.y-r.y)>=MIN_SEP)) picked.push(r);
+    }
+    const maxMin = picked.length ? picked[0].minutes : 0;
+    scanResultLayer.clearLayers();
+    const listEl=$('scanList'); listEl.innerHTML='';
+    picked.forEach((r,idx)=>{
+      const ll = frame.toLL({x:r.x, y:r.y});
+      const pct = maxMin ? r.minutes/maxMin : 0;
+      const col = pct>=0.75 ? '#F0A311' : pct>=0.4 ? '#E6BE5C' : '#C2B295';
+      L.marker([ll.lat,ll.lng], {icon:L.divIcon({className:'', iconSize:[26,26], iconAnchor:[13,13],
+        html:`<div style="width:26px;height:26px;border-radius:50%;background:${col};border:1.5px solid #201B14;display:flex;align-items:center;justify-content:center;font:700 12px 'Space Grotesk',sans-serif;color:#201B14;box-shadow:0 2px 0 #201B14;">${idx+1}</div>`})})
+        .on('click', ()=> setPin(ll.lat, ll.lng, `Sunny spot #${idx+1}`))
+        .addTo(scanResultLayer);
+      const card=document.createElement('button');
+      card.className='scan-card'; card.type='button';
+      card.innerHTML = `<span class="scan-rank">#${idx+1}</span><span class="scan-hrs">${fmtDur(r.minutes)}</span>`;
+      card.onclick = ()=> setPin(ll.lat, ll.lng, `Sunny spot #${idx+1}`);
+      listEl.appendChild(card);
+    });
+    $('scanSpin').hidden=true;
+    $('scanHead').textContent = picked.length
+      ? `☀ Top ${picked.length} · ${dateKey(S.date)}`
+      : 'No standout sunny spots found in that zone.';
+    S.scan = {pts, date:new Date(S.date)};
+    $('scanBtn').setAttribute('aria-pressed', picked.length ? 'true' : 'false');
+  }
+  chunk();
+}
+
 /* ---------------- toast + compass ---------------- */
 let toastTimer=null;
 function toast(msg, ms=3800){
@@ -1268,4 +1621,3 @@ setInterval(renderAmbient, 60000);
 </script>
 </body>
 </html>
-
